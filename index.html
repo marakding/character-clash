@@ -472,16 +472,77 @@ function enterLobby(){
 }
 
 function listenLobby(){
-  const r = onValue(ref(db,`rooms/${G.roomCode}`), snap => {
+  const r = onValue(ref(db,'rooms/'+G.roomCode), snap => {
     if(!snap.exists()) return;
     const room = snap.val();
+    G._room = room;
     G.players = room.players || {};
     renderLobbyPlayers();
     if(G.isHost) document.getElementById('host-lobby-actions').style.display='block';
-    if(room.status === 'categories'){
-      G.categories = room.categories || [];
+    if(room.status === 'categories' && room.categories && room.categories.length){
+      G.categories = room.categories;
       clearListeners();
       showCategoriesScreen(room);
+      startMasterListener();
+    }
+  });
+  G.listeners.push(r);
+}
+
+// Master listener: drives all transitions after lobby for ALL players
+function startMasterListener(){
+  let lastStatus = '';
+  let narrationShown = false;
+  const r = onValue(ref(db,'rooms/'+G.roomCode), snap => {
+    if(!snap.exists()) return;
+    const room = snap.val();
+    G._room = room;
+    G.players = room.players || {};
+
+    if(room.status === 'categories' && lastStatus !== 'categories'){
+      lastStatus = 'categories';
+      narrationShown = false;
+      G.categories = room.categories || G.categories;
+      showCategoriesScreen(room);
+    }
+    else if(room.status === 'characters' && lastStatus !== 'characters'){
+      lastStatus = 'characters';
+      showCharactersScreen(room);
+    }
+    else if(room.status === 'battle' && room.narration && !narrationShown){
+      narrationShown = true;
+      lastStatus = 'battle';
+      G.scores = room.scores || {};
+      showScreen('screen-battle');
+      renderScoreboard();
+      renderVsStrip(room);
+      document.getElementById('battle-loading').style.display='none';
+      document.getElementById('narration').style.display='none';
+      document.getElementById('winner-wrap').style.display='none';
+      document.getElementById('battle-actions').style.display='none';
+      typeNarration(room.narration);
+    }
+    // Categories screen: re-render when picks change
+    else if(room.status === 'categories' && lastStatus === 'categories'){
+      G._room = room;
+      renderCategories();
+      // Check if all players have picked
+      const teams = room.teams || {};
+      const total = Object.keys(G.players).length;
+      const picked = Object.values(teams).filter(t=>t.categoryIdx!==undefined).length;
+      if(picked >= total && total > 0 && lastStatus !== 'characters'){
+        lastStatus = 'characters';
+        setTimeout(()=>showCharactersScreen(room), 600);
+      }
+    }
+    // Characters screen: re-render ready list
+    else if(room.status === 'categories' && lastStatus === 'characters'){
+      const teams = room.teams || {};
+      const total = Object.keys(G.players).length;
+      const ready = Object.values(teams).filter(t=>t.ready).length;
+      renderReadyList(teams);
+      document.getElementById('waiting-battle-msg').textContent = 
+        ready===total ? 'Everyone is ready! Starting...' : 'Waiting for '+(total-ready)+' more player(s)...';
     }
   });
   G.listeners.push(r);
@@ -525,7 +586,7 @@ async function fetchCategories(diff){
     const res = await fetch('https://character-clash-api.marakding.workers.dev',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:500,messages:[{role:'user',content:prompt}]})
     });
     const data = await res.json();
     const text = data.content?.find(b=>b.type==='text')?.text || '[]';
@@ -624,22 +685,9 @@ function renderCatPlayerStatus(){
 }
 
 function listenCategories(){
-  const r = onValue(ref(db,`rooms/${G.roomCode}`), snap => {
-    if(!snap.exists()) return;
-    const room = snap.val();
-    G._room = room;
-    G.players = room.players || {};
-    G.categories = room.categories || G.categories;
-    renderCategories();
-    const teams = room.teams || {};
-    const total = Object.keys(G.players).length;
-    const picked = Object.values(teams).filter(t=>t.categoryIdx!==undefined).length;
-    if(picked >= total && total > 0){
-      clearListeners();
-      setTimeout(()=>showCharactersScreen(room), 600);
-    }
-  });
-  G.listeners.push(r);
+  // Handled by master listener after lobby
+  // For play-again flows, restart master listener
+  startMasterListener();
 }
 
 // ── CHARACTERS ────────────────────────────
@@ -674,6 +722,18 @@ window.submitCharacters = async function(){
   await update(ref(db,'rooms/'+G.roomCode+'/teams/'+G.myId), { characters, ready: true });
   document.querySelectorAll('#char-inputs input').forEach(el => el.disabled = true);
   document.querySelector('#char-card .btn.primary').disabled = true;
+  // Check if all ready and trigger battle
+  const snap = await get(ref(db,'rooms/'+G.roomCode));
+  const roomNow = snap.val();
+  const teams2 = roomNow.teams || {};
+  const total2 = Object.keys(roomNow.players || {}).length;
+  const ready2 = Object.values(teams2).filter(t=>t.ready).length;
+  renderReadyList(teams2);
+  document.getElementById('waiting-battle-msg').textContent = 
+    ready2===total2 ? 'Everyone is ready! Starting...' : 'Waiting for '+(total2-ready2)+' more player(s)...';
+  if(ready2 >= total2 && G.isHost){
+    await showBattleScreen(roomNow);
+  }
 }
 
 function listenCharacters(){
@@ -709,38 +769,15 @@ function renderReadyList(teams){
 
 // ── BATTLE ────────────────────────────────
 async function showBattleScreen(room){
-  showScreen('screen-battle');
-  G.scores = room.scores || {};
-  renderScoreboard();
-  renderVsStrip(room);
-  document.getElementById('battle-loading').style.display='block';
-  document.getElementById('narration').style.display='none';
-  document.getElementById('winner-wrap').style.display='none';
-  document.getElementById('battle-actions').style.display='none';
-
-  // All players listen for narration written to Firebase by host
-  G._narrationShown = false;
-  const r = onValue(ref(db,'rooms/'+G.roomCode), snap => {
-    if(!snap.exists()) return;
-    const room2 = snap.val();
-    if(room2.narration && !G._narrationShown){
-      G._narrationShown = true;
-      G.scores = room2.scores || {};
-      document.getElementById('battle-loading').style.display='none';
-      typeNarration(room2.narration);
-    }
-    // Non-host: listen for play-again trigger from host
-    if(!G.isHost && room2.status === 'categories'){
-      clearListeners();
-      G.categories = room2.categories || G.categories;
-      G._room = room2;
-      showCategoriesScreen(room2);
-    }
-  });
-  G.listeners.push(r);
-
-  // Only host generates the battle and writes to Firebase
+  // Only host generates — master listener handles display for everyone
   if(G.isHost){
+    showScreen('screen-battle');
+    renderScoreboard();
+    renderVsStrip(room);
+    document.getElementById('battle-loading').style.display='block';
+    document.getElementById('narration').style.display='none';
+    document.getElementById('winner-wrap').style.display='none';
+    document.getElementById('battle-actions').style.display='none';
     const narration = await generateBattle(room);
     const winnerName = extractWinner(narration);
     const winner = winnerName ? Object.values(G.players).find(p=>winnerName.toLowerCase().includes(p.name.toLowerCase())) : null;
@@ -794,7 +831,7 @@ async function generateBattle(room){
     const res = await fetch('https://character-clash-api.marakding.workers.dev',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1200,messages:[{role:'user',content:prompt}]})
     });
     const data = await res.json();
     console.log('Battle API response:', data);
@@ -855,15 +892,16 @@ window.playAgainNewCats = async function(){
   document.getElementById('cat-grid').style.display='none';
   const cats = await fetchCategories(G.difficulty);
   G.categories = cats;
+  // Write to Firebase first — master listener will transition all players
   await update(ref(db,'rooms/'+G.roomCode), { status:'categories', teams:{}, narration:null, winner:null, categories: cats });
-  showCategoriesScreen({ categories: cats });
+  startMasterListener();
 }
 
 window.playAgainSameCats = async function(){
   if(!G.isHost){ alert('Only the host can start a new round!'); return; }
   clearListeners();
   await update(ref(db,'rooms/'+G.roomCode), { status:'categories', teams:{}, narration:null, winner:null });
-  showCategoriesScreen({ categories: G.categories });
+  startMasterListener();
 }
 
 function clearListeners(){
