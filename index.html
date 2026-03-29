@@ -489,29 +489,47 @@ function listenLobby(){
   G.listeners.push(r);
 }
 
-// Master listener: drives all transitions after lobby for ALL players
+// Master listener: single source of truth for all screen transitions
 function startMasterListener(){
-  let lastStatus = '';
   let narrationShown = false;
   const r = onValue(ref(db,'rooms/'+G.roomCode), snap => {
     if(!snap.exists()) return;
     const room = snap.val();
     G._room = room;
     G.players = room.players || {};
+    const status = room.status || 'categories';
+    const teams = room.teams || {};
+    const total = Object.keys(G.players).length;
 
-    if(room.status === 'categories' && lastStatus !== 'categories'){
-      lastStatus = 'categories';
+    if(status === 'categories'){
       narrationShown = false;
       G.categories = room.categories || G.categories;
-      showCategoriesScreen(room);
+      // Check if all picked a category -> go to characters
+      const picked = Object.values(teams).filter(t=>t.categoryIdx!==undefined).length;
+      if(picked >= total && total > 0){
+        showCharactersScreen(room);
+      } else {
+        // Still picking - just re-render pills if on categories screen
+        if(document.getElementById('screen-categories').classList.contains('active')){
+          renderCategories();
+        }
+      }
     }
-    else if(room.status === 'characters' && lastStatus !== 'characters'){
-      lastStatus = 'characters';
-      showCharactersScreen(room);
+    else if(status === 'characters'){
+      // Update ready list for everyone
+      const ready = Object.values(teams).filter(t=>t.ready).length;
+      if(document.getElementById('screen-characters').classList.contains('active')){
+        renderReadyList(teams);
+        const msg = document.getElementById('waiting-battle-msg');
+        if(msg) msg.textContent = ready===total ? 'Everyone is ready! Starting...' : 'Waiting for '+(total-ready)+' more player(s)...';
+      }
+      // Host triggers battle when all ready
+      if(ready >= total && total > 0 && G.isHost){
+        showBattleScreen(room);
+      }
     }
-    else if(room.status === 'battle' && room.narration && !narrationShown){
+    else if(status === 'battle' && room.narration && !narrationShown){
       narrationShown = true;
-      lastStatus = 'battle';
       G.scores = room.scores || {};
       showScreen('screen-battle');
       renderScoreboard();
@@ -521,28 +539,6 @@ function startMasterListener(){
       document.getElementById('winner-wrap').style.display='none';
       document.getElementById('battle-actions').style.display='none';
       typeNarration(room.narration);
-    }
-    // Categories screen: re-render when picks change
-    else if(room.status === 'categories' && lastStatus === 'categories'){
-      G._room = room;
-      renderCategories();
-      // Check if all players have picked
-      const teams = room.teams || {};
-      const total = Object.keys(G.players).length;
-      const picked = Object.values(teams).filter(t=>t.categoryIdx!==undefined).length;
-      if(picked >= total && total > 0 && lastStatus !== 'characters'){
-        lastStatus = 'characters';
-        setTimeout(()=>showCharactersScreen(room), 600);
-      }
-    }
-    // Characters screen: re-render ready list
-    else if(room.status === 'categories' && lastStatus === 'characters'){
-      const teams = room.teams || {};
-      const total = Object.keys(G.players).length;
-      const ready = Object.values(teams).filter(t=>t.ready).length;
-      renderReadyList(teams);
-      document.getElementById('waiting-battle-msg').textContent = 
-        ready===total ? 'Everyone is ready! Starting...' : 'Waiting for '+(total-ready)+' more player(s)...';
     }
   });
   G.listeners.push(r);
@@ -685,9 +681,7 @@ function renderCatPlayerStatus(){
 }
 
 function listenCategories(){
-  // Handled by master listener after lobby
-  // For play-again flows, restart master listener
-  startMasterListener();
+  // Handled by master listener
 }
 
 // ── CHARACTERS ────────────────────────────
@@ -719,21 +713,11 @@ window.submitCharacters = async function(){
     characters[catList[i].cat] = val;
   }
   document.getElementById('char-error').textContent='';
+  // Write characters and set room status to 'characters' so master listener knows where we are
+  await update(ref(db,'rooms/'+G.roomCode), { status:'characters' });
   await update(ref(db,'rooms/'+G.roomCode+'/teams/'+G.myId), { characters, ready: true });
   document.querySelectorAll('#char-inputs input').forEach(el => el.disabled = true);
   document.querySelector('#char-card .btn.primary').disabled = true;
-  // Check if all ready and trigger battle
-  const snap = await get(ref(db,'rooms/'+G.roomCode));
-  const roomNow = snap.val();
-  const teams2 = roomNow.teams || {};
-  const total2 = Object.keys(roomNow.players || {}).length;
-  const ready2 = Object.values(teams2).filter(t=>t.ready).length;
-  renderReadyList(teams2);
-  document.getElementById('waiting-battle-msg').textContent = 
-    ready2===total2 ? 'Everyone is ready! Starting...' : 'Waiting for '+(total2-ready2)+' more player(s)...';
-  if(ready2 >= total2 && G.isHost){
-    await showBattleScreen(roomNow);
-  }
 }
 
 function listenCharacters(){
@@ -768,23 +752,26 @@ function renderReadyList(teams){
 }
 
 // ── BATTLE ────────────────────────────────
+let _battleGenerating = false;
 async function showBattleScreen(room){
-  // Only host generates — master listener handles display for everyone
-  if(G.isHost){
-    showScreen('screen-battle');
-    renderScoreboard();
-    renderVsStrip(room);
-    document.getElementById('battle-loading').style.display='block';
-    document.getElementById('narration').style.display='none';
-    document.getElementById('winner-wrap').style.display='none';
-    document.getElementById('battle-actions').style.display='none';
-    const narration = await generateBattle(room);
-    const winnerName = extractWinner(narration);
-    const winner = winnerName ? Object.values(G.players).find(p=>winnerName.toLowerCase().includes(p.name.toLowerCase())) : null;
-    const newScores = Object.assign({}, G.scores);
-    if(winner) newScores[winner.name] = (newScores[winner.name]||0)+1;
-    await update(ref(db,'rooms/'+G.roomCode), { status:'battle', narration, scores: newScores, winner: winner ? winner.name : null });
-  }
+  if(!G.isHost || _battleGenerating) return;
+  _battleGenerating = true;
+  // Show loading on host while generating
+  showScreen('screen-battle');
+  renderScoreboard();
+  renderVsStrip(room);
+  document.getElementById('battle-loading').style.display='block';
+  document.getElementById('narration').style.display='none';
+  document.getElementById('winner-wrap').style.display='none';
+  document.getElementById('battle-actions').style.display='none';
+  const narration = await generateBattle(room);
+  const winnerName = extractWinner(narration);
+  const winner = winnerName ? Object.values(G.players).find(p=>winnerName.toLowerCase().includes(p.name.toLowerCase())) : null;
+  const newScores = Object.assign({}, G.scores);
+  if(winner) newScores[winner.name] = (newScores[winner.name]||0)+1;
+  // Write to Firebase — master listener picks this up for ALL players
+  await update(ref(db,'rooms/'+G.roomCode), { status:'battle', narration, scores: newScores, winner: winner ? winner.name : null });
+  _battleGenerating = false;
 }
 
 function renderVsStrip(room){
@@ -886,19 +873,20 @@ async function typeNarration(text){
 // ── PLAY AGAIN ────────────────────────────
 window.playAgainNewCats = async function(){
   if(!G.isHost){ alert('Only the host can start a new round!'); return; }
+  _battleGenerating = false;
   clearListeners();
   showScreen('screen-categories');
   document.getElementById('cats-loading').style.display='flex';
   document.getElementById('cat-grid').style.display='none';
   const cats = await fetchCategories(G.difficulty);
   G.categories = cats;
-  // Write to Firebase first — master listener will transition all players
   await update(ref(db,'rooms/'+G.roomCode), { status:'categories', teams:{}, narration:null, winner:null, categories: cats });
   startMasterListener();
 }
 
 window.playAgainSameCats = async function(){
   if(!G.isHost){ alert('Only the host can start a new round!'); return; }
+  _battleGenerating = false;
   clearListeners();
   await update(ref(db,'rooms/'+G.roomCode), { status:'categories', teams:{}, narration:null, winner:null });
   startMasterListener();
