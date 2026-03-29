@@ -491,7 +491,10 @@ function listenLobby(){
 
 // Master listener: single source of truth for all screen transitions
 function startMasterListener(){
+  let lastSeenStatus = '';
+  let charsScreenShown = false;
   let narrationShown = false;
+
   const r = onValue(ref(db,'rooms/'+G.roomCode), snap => {
     if(!snap.exists()) return;
     const room = snap.val();
@@ -501,33 +504,41 @@ function startMasterListener(){
     const teams = room.teams || {};
     const total = Object.keys(G.players).length;
 
+    // ── CATEGORIES phase ──
     if(status === 'categories'){
+      lastSeenStatus = 'categories';
+      charsScreenShown = false;
       narrationShown = false;
       G.categories = room.categories || G.categories;
-      // Check if all picked a category -> go to characters
       const picked = Object.values(teams).filter(t=>t.categoryIdx!==undefined).length;
-      if(picked >= total && total > 0){
+      if(picked >= total && total > 0 && !charsScreenShown){
+        charsScreenShown = true;
         showCharactersScreen(room);
-      } else {
-        // Still picking - just re-render pills if on categories screen
-        if(document.getElementById('screen-categories').classList.contains('active')){
-          renderCategories();
-        }
+      } else if(!charsScreenShown && document.getElementById('screen-categories').classList.contains('active')){
+        renderCategories();
       }
     }
+
+    // ── CHARACTERS phase ──
     else if(status === 'characters'){
-      // Update ready list for everyone
-      const ready = Object.values(teams).filter(t=>t.ready).length;
-      if(document.getElementById('screen-characters').classList.contains('active')){
-        renderReadyList(teams);
-        const msg = document.getElementById('waiting-battle-msg');
-        if(msg) msg.textContent = ready===total ? 'Everyone is ready! Starting...' : 'Waiting for '+(total-ready)+' more player(s)...';
+      lastSeenStatus = 'characters';
+      // Show characters screen if not already showing
+      if(!charsScreenShown){
+        charsScreenShown = true;
+        showCharactersScreen(room);
       }
-      // Host triggers battle when all ready
+      // Update ready list
+      const ready = Object.values(teams).filter(t=>t.ready).length;
+      renderReadyList(teams);
+      const msg = document.getElementById('waiting-battle-msg');
+      if(msg) msg.textContent = ready===total ? 'Everyone is ready! Starting...' : 'Waiting for '+(total-ready)+' more player(s)...';
+      // Host generates battle when all ready
       if(ready >= total && total > 0 && G.isHost){
         showBattleScreen(room);
       }
     }
+
+    // ── BATTLE phase ──
     else if(status === 'battle' && room.narration && !narrationShown){
       narrationShown = true;
       G.scores = room.scores || {};
