@@ -590,28 +590,147 @@ window.hostStartCategories = async function(){
 }
 
 // ── CATEGORIES ───────────────────────────
-async function fetchCategories(diff){
-  const diffDesc = {easy:'broad and very familiar — Dragon, Wizard, Superhero level',medium:'moderately specific — Trickster God, Elemental Titan level',hard:'very niche and obscure — Deep Sea Horror, Void Entity, Forgotten Deity level'};
-  const prompt = `Generate exactly 15 creative unique categories for Character Clash, a fantasy battle game. Difficulty: ${diff} (${diffDesc[diff]}). Each category = a TYPE of powerful character, 1-4 words, evocative. Return ONLY a JSON array of 15 strings, no explanation, no markdown.`;
-  try {
-    const res = await fetch('https://character-clash-api.marakding.workers.dev',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:500,messages:[{role:'user',content:prompt}]})
-    });
-    const data = await res.json();
-    const text = data.content?.find(b=>b.type==='text')?.text || '[]';
-    const clean = text.replace(/```json|```/g,'').trim();
-    return JSON.parse(clean);
-  } catch(e){
-    console.error('Category fetch failed:', e);
-    return getDefaultCats(diff);
+const CAT_POOLS = {
+  easy: [
+    {name:'Dragon',hint:'fire-breathing flying beast'},
+    {name:'Wizard',hint:'master of spells & magic'},
+    {name:'Giant Robot',hint:'enormous mechanical fighter'},
+    {name:'Superhero',hint:'human with extraordinary powers'},
+    {name:'Animal King',hint:'ruler of all beasts'},
+    {name:'Ninja',hint:'silent shadow warrior'},
+    {name:'Ghost',hint:'untouchable spirit'},
+    {name:'Vampire',hint:'immortal blood drinker'},
+    {name:'Time Traveler',hint:'moves through past & future'},
+    {name:'Shapeshifter',hint:'becomes anything or anyone'},
+    {name:'Berserker',hint:'unstoppable rage fighter'},
+    {name:'Sea Monster',hint:'terror of the deep ocean'},
+    {name:'Fire God',hint:'deity of flames & destruction'},
+    {name:'Ice Queen',hint:'ruler of frost & cold'},
+    {name:'Ancient Giant',hint:'colossal legendary warrior'},
+    {name:'Werewolf',hint:'half human half wolf'},
+    {name:'Witch',hint:'casts curses & dark spells'},
+    {name:'Pirate Captain',hint:'feared ruler of the seas'},
+    {name:'Samurai',hint:'master of the sword'},
+    {name:'Knight',hint:'armored champion in battle'},
+    {name:'Phoenix',hint:'immortal fire bird'},
+    {name:'Troll',hint:'massive brutish monster'},
+    {name:'Mummy',hint:'undead ancient warrior'},
+    {name:'Cyclops',hint:'one-eyed giant brute'},
+    {name:'Thunder God',hint:'deity of storms & lightning'},
+    {name:'Stone Golem',hint:'living creature made of rock'},
+    {name:'Dark Elf',hint:'deadly elf from the underworld'},
+    {name:'Lava Monster',hint:'creature born from molten rock'},
+    {name:'Minotaur',hint:'half man half bull beast'},
+    {name:'Kraken',hint:'giant tentacled sea beast'},
+    {name:'Demon Lord',hint:'ruler of the underworld'},
+    {name:'Forest Witch',hint:'nature magic sorceress'},
+    {name:'Dark Knight',hint:'armored warrior who serves evil'},
+    {name:'Gargoyle',hint:'stone creature that comes alive'},
+    {name:'Chimera',hint:'creature made of multiple animals'},
+    {name:'War Elephant',hint:'armored battle beast'},
+    {name:'Arctic Beast',hint:'terrifying frozen north creature'},
+    {name:'Giant Scorpion',hint:'massive deadly desert predator'},
+    {name:'Sky Pirate',hint:'aerial raider with flying ship'},
+    {name:'Witch Doctor',hint:'master of voodoo & spirits'},
+  ],
+  medium: [
+    {name:'Trickster God',hint:'divine master of deception'},
+    {name:'Elemental Titan',hint:'giant made of fire ice or stone'},
+    {name:'Undead Overlord',hint:'commands armies of the dead'},
+    {name:'Shadow Assassin',hint:'strikes from darkness unseen'},
+    {name:'Berserker Demigod',hint:'half god of unstoppable rage'},
+    {name:'Psychic Champion',hint:'fights using mind powers'},
+    {name:'Ancient Golem',hint:'stone giant with magic runes'},
+    {name:'Storm Caller',hint:'controls weather and lightning'},
+    {name:'Soul Reaper',hint:'harvests the souls of the fallen'},
+    {name:'Blood Mage',hint:'uses own blood as weapon'},
+    {name:'Iron Colossus',hint:'indestructible metal giant'},
+    {name:'Phantom Archer',hint:'ghost bowman who never misses'},
+    {name:'War Deity',hint:'god worshipped only in battle'},
+    {name:'Nature Spirit',hint:'ancient force of the living world'},
+    {name:'Void Walker',hint:'steps between dimensions'},
+    {name:'Plague Doctor',hint:'master of disease and poison'},
+    {name:'Dream Weaver',hint:'attacks you through your sleep'},
+    {name:'Bone Necromancer',hint:'raises the dead to fight'},
+    {name:'Thunder Titan',hint:'storms incarnate in giant form'},
+    {name:'Cursed Paladin',hint:'holy warrior turned dark'},
+    {name:'Gravity Bender',hint:'controls the force of gravity'},
+    {name:'Time Witch',hint:'can rewind and pause time'},
+    {name:'Mirror Demon',hint:'copies your exact fighting style'},
+    {name:'Star Summoner',hint:'calls power from the cosmos'},
+    {name:'Frost Revenant',hint:'undead warrior frozen in ice'},
+    {name:'Lightning Djinn',hint:'electric wish-granting spirit'},
+    {name:'Plague Rider',hint:'spreads death on horseback'},
+    {name:'Rune Knight',hint:'warrior with magic-carved armor'},
+    {name:'Chaos Mage',hint:'magic that is completely unpredictable'},
+    {name:'Swamp Witch',hint:'controls mud rot and dark water'},
+    {name:'Warlord Specter',hint:'ghost of an undefeated general'},
+    {name:'Inferno Drake',hint:'dragon made entirely of fire'},
+    {name:'Tide Caller',hint:'controls oceans and tidal waves'},
+    {name:'Astral Duelist',hint:'fights as pure energy projection'},
+    {name:'Serpent God',hint:'deity worshipped as a giant snake'},
+    {name:'Wind Phantom',hint:'invisible fighter made of air'},
+    {name:'Doom Herald',hint:'brings prophecies of destruction'},
+    {name:'Ember Warden',hint:'guardian who controls wildfire'},
+    {name:'Iron Witch',hint:'turns living things into metal'},
+    {name:'Lava Titan',hint:'giant born from a volcano'},
+  ],
+  hard: [
+    {name:'Deep Sea Horror',hint:'unknowable creature from the abyss'},
+    {name:'Fallen Angel Warrior',hint:'divine soldier stripped of grace'},
+    {name:'Clockwork Assassin',hint:'mechanical killer with perfect aim'},
+    {name:'Dream Demon',hint:'monster that lives in nightmares'},
+    {name:'Void Entity',hint:'being from outside reality itself'},
+    {name:'Cursed Samurai',hint:'undead warrior bound by an oath'},
+    {name:'Forgotten Deity',hint:'god no one worships anymore'},
+    {name:'Insect Swarm Intelligence',hint:'millions of bugs thinking as one'},
+    {name:'Mirror Wraith',hint:'reflection that escapes the mirror'},
+    {name:'Bone Oracle',hint:'skeleton prophet who sees death'},
+    {name:'Fracture Witch',hint:'shatters space itself as weapon'},
+    {name:'Hollow God',hint:'divine shell with nothing inside'},
+    {name:'Plague Herald',hint:'living announcement of extinction'},
+    {name:'Entropy Specter',hint:'causes everything to fall apart'},
+    {name:'Primordial Leviathan',hint:'creature older than the world'},
+    {name:'Inverse Paladin',hint:'heals enemies and wounds allies'},
+    {name:'Mirror Demon',hint:'becomes a perfect copy of you'},
+    {name:'Unbound Revenant',hint:'undead with no memory of life'},
+    {name:'Silence Keeper',hint:'erases all sound as a weapon'},
+    {name:'Paradox Mage',hint:'spells that contradict themselves'},
+    {name:'Bleeding Star',hint:'cosmic entity made of dying light'},
+    {name:'Rust God',hint:'deity of decay and corrosion'},
+    {name:'Threshold Guardian',hint:'exists only at doorways and borders'},
+    {name:'Name Eater',hint:'destroys you by erasing your identity'},
+    {name:'Wound Collector',hint:'grows stronger from every injury'},
+    {name:'Echo Warrior',hint:'fights using copies of past battles'},
+    {name:'Stillness Hunter',hint:'only attacks when nothing moves'},
+    {name:'Veil Dancer',hint:'moves between life and death at will'},
+    {name:'Hunger Without Form',hint:'an appetite that devours everything'},
+    {name:'Geometry Breaker',hint:'weaponizes impossible shapes'},
+    {name:'Unfinished God',hint:'deity that was never completed'},
+    {name:'Color Thief',hint:'drains the life force of all color'},
+    {name:'Causality Witch',hint:'rewrites what caused what'},
+    {name:'The Unwound',hint:'being that exists outside time'},
+    {name:'Gravity Sovereign',hint:'controls collapse of space'},
+    {name:'Pale Cartographer',hint:'rewrites the map of reality'},
+    {name:'Inverse Giant',hint:'gets smaller and more powerful'},
+    {name:'The Last Witness',hint:'saw the birth of the universe'},
+    {name:'Weight of Memory',hint:'attacks with mass of forgotten things'},
+    {name:'Cartographer of Souls',hint:'maps the landscape of the dead'},
+  ]
+};
+
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
   }
+  return a;
 }
 
-function getDefaultCats(diff){
-  const c={easy:['Dragon','Wizard','Giant Robot','Superhero','Animal King','Ninja','Ghost','Vampire','Time Traveler','Shapeshifter','Berserker','Sea Monster','Fire God','Ice Queen','Ancient Giant'],medium:['Trickster God','Elemental Titan','Undead Overlord','Shadow Assassin','Berserker Demigod','Psychic Champion','Ancient Golem','Storm Caller','Soul Reaper','Blood Mage','Iron Colossus','Phantom Archer','War Deity','Nature Spirit','Void Walker'],hard:['Deep Sea Horror','Fallen Angel Warrior','Clockwork Assassin','Dream Demon','Void Entity','Cursed Samurai','Forgotten Deity','Insect Swarm Intelligence','Primordial Chaos Being','Mirror Wraith','Bone Oracle','Dust Revenant','Fracture Witch','Hollow God','Plague Herald']};
-  return c[diff]||c.medium;
+function fetchCategories(diff){
+  const pool = CAT_POOLS[diff] || CAT_POOLS.medium;
+  return Promise.resolve(shuffle(pool).slice(0,10));
 }
 
 function showCategoriesScreen(room){
