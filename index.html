@@ -147,9 +147,12 @@ input[type=text]::placeholder{color:var(--text-muted)}
 <body>
 
 <!-- ══════════════════════════════════════
+     SCREEN: API KEY SETUP
+══════════════════════════════════════ -->
+<!-- ══════════════════════════════════════
      SCREEN: LANDING
 ══════════════════════════════════════ -->
-<div class="screen active" id="screen-landing">
+<div class="screen" id="screen-landing">
   <div class="content" style="display:flex;flex-direction:column;justify-content:center;min-height:100vh">
     <div style="text-align:center;padding:2rem 0 1.5rem">
       <div class="logo">⚔ Character Clash ⚔<span class="logo-sub">the ultimate team battle</span></div>
@@ -359,7 +362,6 @@ const firebaseConfig = {
   appId: "1:1032936477193:web:38b51acf380626554e5ed8"
 };
 
-const ANTHROPIC_KEY = "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";
 
 const app = firebase.initializeApp(firebaseConfig);
 const db = getDatabase();
@@ -520,9 +522,9 @@ async function fetchCategories(diff){
   const diffDesc = {easy:'broad and very familiar — Dragon, Wizard, Superhero level',medium:'moderately specific — Trickster God, Elemental Titan level',hard:'very niche and obscure — Deep Sea Horror, Void Entity, Forgotten Deity level'};
   const prompt = `Generate exactly 15 creative unique categories for Character Clash, a fantasy battle game. Difficulty: ${diff} (${diffDesc[diff]}). Each category = a TYPE of powerful character, 1-4 words, evocative. Return ONLY a JSON array of 15 strings, no explanation, no markdown.`;
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages',{
+    const res = await fetch('https://character-clash-api.marakding.workers.dev',{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})
     });
     const data = await res.json();
@@ -791,9 +793,9 @@ async function generateBattle(room){
   }).join('\n');
   const prompt = `You are the dramatic narrator of Character Clash, a team battle game.\n\nTHE TEAMS:\n${teamDesc}\n\nWrite a dramatic battle narration (5-8 paragraphs). Rules:\n- All teams fight simultaneously as units\n- Use each character's real abilities creatively\n- Silly characters can win through cleverness\n- No gore — epic and fun for kids\n- Big moments, reversals, team synergy\n- End with exactly this line on its own: 🏆 WINNER: [winning player name]\n\nMake it unforgettable!`;
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages',{
+    const res = await fetch('https://character-clash-api.marakding.workers.dev',{
       method:'POST',
-      headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
       body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:prompt}]})
     });
     const data = await res.json();
@@ -882,6 +884,8 @@ const roomFromUrl = urlParams.get('room');
 if(roomFromUrl){
   document.getElementById('join-code').value = roomFromUrl.toUpperCase();
 }
+
+showScreen('screen-landing');
 </script>
 </body>
 </html>
