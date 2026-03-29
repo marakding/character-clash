@@ -734,21 +734,7 @@ window.submitCharacters = async function(){
 }
 
 function listenCharacters(){
-  const r = onValue(ref(db,`rooms/${G.roomCode}`), snap => {
-    if(!snap.exists()) return;
-    const room = snap.val();
-    G._room = room;
-    const teams = room.teams || {};
-    const total = Object.keys(G.players).length;
-    const ready = Object.values(teams).filter(t=>t.ready).length;
-    renderReadyList(teams);
-    document.getElementById('waiting-battle-msg').textContent = ready===total ? 'Everyone is ready! Starting...' : `Waiting for ${total-ready} more player(s)...`;
-    if(ready >= total && total > 0){
-      clearListeners();
-      setTimeout(()=>showBattleScreen(room), 800);
-    }
-  });
-  G.listeners.push(r);
+  // Handled entirely by master listener — do not clear or replace it
 }
 
 function renderReadyList(teams){
