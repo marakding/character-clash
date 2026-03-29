@@ -479,7 +479,7 @@ function listenLobby(){
     if(room.status === 'categories'){
       G.categories = room.categories || [];
       clearListeners();
-      showCategoriesScreen();
+      showCategoriesScreen(room);
     }
   });
   G.listeners.push(r);
@@ -512,6 +512,7 @@ window.hostStartCategories = async function(){
   const cats = await fetchCategories(G.difficulty);
   G.categories = cats;
   await update(ref(db,`rooms/${G.roomCode}`), { status:'categories', categories: cats });
+  showCategoriesScreen({ categories: cats });
 }
 
 // ── CATEGORIES ───────────────────────────
@@ -529,6 +530,7 @@ async function fetchCategories(diff){
     const clean = text.replace(/```json|```/g,'').trim();
     return JSON.parse(clean);
   } catch(e){
+    console.error('Category fetch failed:', e);
     return getDefaultCats(diff);
   }
 }
@@ -538,8 +540,14 @@ function getDefaultCats(diff){
   return c[diff]||c.medium;
 }
 
-function showCategoriesScreen(){
+function showCategoriesScreen(room){
+  if(room && room.categories && room.categories.length){
+    G.categories = room.categories;
+  }
   showScreen('screen-categories');
+  document.getElementById('cats-loading').style.display='none';
+  document.getElementById('cat-grid').style.display='flex';
+  document.getElementById('cat-status').style.display='flex';
   renderCategories();
   listenCategories();
 }
