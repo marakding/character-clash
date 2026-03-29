@@ -524,7 +524,7 @@ async function fetchCategories(diff){
   try {
     const res = await fetch('https://character-clash-api.marakding.workers.dev',{
       method:'POST',
-      headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})
     });
     const data = await res.json();
@@ -646,33 +646,33 @@ function listenCategories(){
 function showCharactersScreen(room){
   G._room = room;
   const teams = room.teams || {};
-  const myTeam = teams[G.myId] || {};
-  const myCategory = myTeam.categoryName || G.categories[myTeam.categoryIdx] || '?';
-  const allCategories = Object.values(teams).map(t=>t.categoryName).filter(Boolean);
+  // Build ordered category list from all players' picks
+  const catList = Object.entries(teams)
+    .filter(([pid,t]) => t.categoryName)
+    .map(([pid,t]) => ({ cat: t.categoryName, pickedBy: G.players[pid]?.name || '?' }));
+  G._catList = catList;
   showScreen('screen-characters');
   const inp = document.getElementById('char-inputs');
-  inp.innerHTML = allCategories.map((cat,i) => `
+  inp.innerHTML = catList.map((entry, i) => `
     <div class="cat-input-row">
-      <span class="cat-badge">${cat}${cat===myCategory?' (yours)':''}</span>
-      <input type="text" id="char-${i}" placeholder="Your character..." maxlength="40" ${cat!==myCategory?'disabled style="opacity:0.4"':''} />
+      <span class="cat-badge">${entry.cat} <span style="font-size:0.7rem;color:var(--text-muted)">(${entry.pickedBy}'s pick)</span></span>
+      <input type="text" id="char-${i}" placeholder="Your character..." maxlength="40" />
     </div>
   `).join('');
   listenCharacters();
 }
 
 window.submitCharacters = async function(){
-  const room = G._room || {};
-  const teams = room.teams || {};
-  const myTeam = teams[G.myId] || {};
-  const myCategory = myTeam.categoryName;
-  const allCategories = Object.values(teams).map(t=>t.categoryName).filter(Boolean);
-  const myIdx = allCategories.indexOf(myCategory);
-  const input = document.getElementById(`char-${myIdx}`);
-  const val = input?.value.trim();
-  if(!val){ document.getElementById('char-error').textContent='Enter your character!'; return; }
+  const catList = G._catList || [];
+  const characters = {};
+  for(let i = 0; i < catList.length; i++){
+    const val = document.getElementById('char-'+i)?.value.trim();
+    if(!val){ document.getElementById('char-error').textContent='Fill in a character for every category!'; return; }
+    characters[catList[i].cat] = val;
+  }
   document.getElementById('char-error').textContent='';
-  await update(ref(db,`rooms/${G.roomCode}/teams/${G.myId}`), { character: val, ready: true });
-  if(input) input.disabled = true;
+  await update(ref(db,'rooms/'+G.roomCode+'/teams/'+G.myId), { characters, ready: true });
+  document.querySelectorAll('#char-inputs input').forEach(el => el.disabled = true);
   document.querySelector('#char-card .btn.primary').disabled = true;
 }
 
@@ -718,33 +718,36 @@ async function showBattleScreen(room){
   document.getElementById('winner-wrap').style.display='none';
   document.getElementById('battle-actions').style.display='none';
 
+  // All players listen for narration written to Firebase by host
+  G._narrationShown = false;
+  const r = onValue(ref(db,'rooms/'+G.roomCode), snap => {
+    if(!snap.exists()) return;
+    const room2 = snap.val();
+    if(room2.narration && !G._narrationShown){
+      G._narrationShown = true;
+      G.scores = room2.scores || {};
+      document.getElementById('battle-loading').style.display='none';
+      typeNarration(room2.narration);
+    }
+    // Non-host: listen for play-again trigger from host
+    if(!G.isHost && room2.status === 'categories'){
+      clearListeners();
+      G.categories = room2.categories || G.categories;
+      G._room = room2;
+      showCategoriesScreen(room2);
+    }
+  });
+  G.listeners.push(r);
+
+  // Only host generates the battle and writes to Firebase
   if(G.isHost){
     const narration = await generateBattle(room);
     const winnerName = extractWinner(narration);
-    if(winnerName){
-      const winner = Object.values(G.players).find(p=>narration.toLowerCase().includes(p.name.toLowerCase()));
-      if(winner){
-        const newScores = {...G.scores};
-        newScores[winner.name] = (newScores[winner.name]||0)+1;
-        await update(ref(db,`rooms/${G.roomCode}`), { status:'battle', narration, scores: newScores, winner: winner.name });
-      } else {
-        await update(ref(db,`rooms/${G.roomCode}`), { status:'battle', narration });
-      }
-    } else {
-      await update(ref(db,`rooms/${G.roomCode}`), { status:'battle', narration });
-    }
-  } else {
-    listenBattle();
+    const winner = winnerName ? Object.values(G.players).find(p=>winnerName.toLowerCase().includes(p.name.toLowerCase())) : null;
+    const newScores = Object.assign({}, G.scores);
+    if(winner) newScores[winner.name] = (newScores[winner.name]||0)+1;
+    await update(ref(db,'rooms/'+G.roomCode), { status:'battle', narration, scores: newScores, winner: winner ? winner.name : null });
   }
-
-  const r = onValue(ref(db,`rooms/${G.roomCode}/narration`), snap => {
-    if(!snap.exists()) return;
-    const narration = snap.val();
-    G._narration = narration;
-    document.getElementById('battle-loading').style.display='none';
-    typeNarration(narration);
-  },{onlyOnce:true});
-  G.listeners.push(r);
 }
 
 function renderVsStrip(room){
@@ -753,17 +756,15 @@ function renderVsStrip(room){
   const entries = Object.entries(G.players);
   strip.innerHTML = entries.map(([pid,p],i) => {
     const c = colorFor(p.colorIdx);
-    const cat = teams[pid]?.categoryName || '';
-    const char = teams[pid]?.character || '';
-    return `
-      ${i>0?'<div class="vs-word">VS</div>':''}
-      <div class="vs-chip">
-        <div class="vs-dot" style="background:${c.bg}"></div>
-        <div>
-          <div class="vs-label">${p.name}</div>
-          <div style="font-size:0.75rem;color:var(--text-muted);font-style:italic">${cat}: ${char}</div>
-        </div>
-      </div>`;
+    const chars = teams[pid]?.characters || {};
+    const charDesc = Object.entries(chars).map(([cat,ch]) => cat+': '+ch).join(' · ');
+    return (i>0?'<div class="vs-word">VS</div>':'')+
+      '<div class="vs-chip">'+
+      '<div class="vs-dot" style="background:'+c.bg+'"></div>'+
+      '<div>'+
+      '<div class="vs-label">'+p.name+'</div>'+
+      '<div style="font-size:0.72rem;color:var(--text-muted);font-style:italic">'+charDesc+'</div>'+
+      '</div></div>';
   }).join('');
 }
 
@@ -778,29 +779,29 @@ function renderScoreboard(){
   }).join('');
 }
 
-function listenBattle(){
-  const r = onValue(ref(db,`rooms/${G.roomCode}/narration`), snap => {
-    if(!snap.exists()) return;
-  });
-  G.listeners.push(r);
-}
+
 
 async function generateBattle(room){
   const teams = room.teams || {};
   const teamDesc = Object.entries(G.players).map(([pid,p]) => {
     const t = teams[pid] || {};
-    return `${p.name}'s team — ${t.categoryName}: ${t.character}`;
+    const chars = t.characters || {};
+    const charList = Object.entries(chars).map(([cat,ch]) => cat+': '+ch).join(', ');
+    return p.name+"'s team — "+charList;
   }).join('\n');
-  const prompt = `You are the dramatic narrator of Character Clash, a team battle game.\n\nTHE TEAMS:\n${teamDesc}\n\nWrite a dramatic battle narration (5-8 paragraphs). Rules:\n- All teams fight simultaneously as units\n- Use each character's real abilities creatively\n- Silly characters can win through cleverness\n- No gore — epic and fun for kids\n- Big moments, reversals, team synergy\n- End with exactly this line on its own: 🏆 WINNER: [winning player name]\n\nMake it unforgettable!`;
+  const prompt = "You are the dramatic narrator of Character Clash, a team battle game.\n\nTHE TEAMS:\n"+teamDesc+"\n\nWrite a dramatic battle narration (5-8 paragraphs). Rules:\n- All teams fight simultaneously as units\n- Each player has multiple characters that work together as a team\n- Use each character's real abilities creatively\n- Silly characters can win through cleverness\n- No gore — epic and fun for kids\n- Big moments, reversals, team synergy\n- End with exactly this line on its own: 🏆 WINNER: [winning player name]\n\nMake it unforgettable!";
   try {
     const res = await fetch('https://character-clash-api.marakding.workers.dev',{
       method:'POST',
-      headers:{'Content-Type':'application/json','anthropic-dangerous-direct-browser-access':'true'},
+      headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:prompt}]})
     });
     const data = await res.json();
+    console.log('Battle API response:', data);
+    if(data.error){ console.error('API error:', data.error); return 'The battle was lost to legend...'; }
     return data.content?.find(b=>b.type==='text')?.text || 'The battle was lost to legend...';
   } catch(e){
+    console.error('Battle fetch error:', e);
     return 'The battle was too epic for words... try again!';
   }
 }
@@ -843,34 +844,26 @@ async function typeNarration(text){
     renderScoreboard();
   }
   document.getElementById('battle-actions').style.display='flex';
-  if(!G.isHost){
-    document.getElementById('btn-new-cats').style.display='none';
-    document.getElementById('btn-same-cats').style.display='none';
-  }
 }
 
 // ── PLAY AGAIN ────────────────────────────
 window.playAgainNewCats = async function(){
-  if(!G.isHost) return;
+  if(!G.isHost){ alert('Only the host can start a new round!'); return; }
   clearListeners();
-  await update(ref(db,`rooms/${G.roomCode}`), { status:'categories', teams:{}, narration:null, winner:null });
   showScreen('screen-categories');
   document.getElementById('cats-loading').style.display='flex';
   document.getElementById('cat-grid').style.display='none';
   const cats = await fetchCategories(G.difficulty);
   G.categories = cats;
-  await update(ref(db,`rooms/${G.roomCode}`), { categories: cats });
-  listenCategories();
+  await update(ref(db,'rooms/'+G.roomCode), { status:'categories', teams:{}, narration:null, winner:null, categories: cats });
+  showCategoriesScreen({ categories: cats });
 }
 
 window.playAgainSameCats = async function(){
-  if(!G.isHost) return;
+  if(!G.isHost){ alert('Only the host can start a new round!'); return; }
   clearListeners();
-  await update(ref(db,`rooms/${G.roomCode}`), { status:'categories', teams:{}, narration:null, winner:null });
-  showScreen('screen-categories');
-  document.getElementById('cats-loading').style.display='none';
-  document.getElementById('cat-grid').style.display='flex';
-  listenCategories();
+  await update(ref(db,'rooms/'+G.roomCode), { status:'categories', teams:{}, narration:null, winner:null });
+  showCategoriesScreen({ categories: G.categories });
 }
 
 function clearListeners(){
