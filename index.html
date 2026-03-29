@@ -138,6 +138,18 @@ input[type=text]::placeholder{color:var(--text-muted)}
 .winner-crown{font-size:2.5rem;margin-bottom:0.5rem}
 .winner-label{font-family:'Cinzel',serif;font-size:0.65rem;letter-spacing:0.25em;color:var(--gold);text-transform:uppercase}
 .winner-name{font-family:'Cinzel',serif;font-size:2rem;font-weight:900;color:var(--gold-light);margin-top:0.25rem}
+.scorecard{background:var(--dark2);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-top:1rem}
+.scorecard-title{font-family:'Cinzel',serif;font-size:0.7rem;letter-spacing:0.18em;color:var(--gold);text-transform:uppercase;margin-bottom:0.85rem}
+.scorecard-row{display:flex;align-items:flex-start;gap:0.75rem;padding:0.5rem 0;border-bottom:1px solid var(--border)}
+.scorecard-row:last-child{border-bottom:none}
+.scorecard-emoji{font-size:1.1rem;flex-shrink:0;margin-top:1px}
+.scorecard-info{flex:1}
+.scorecard-char{font-size:0.95rem;font-weight:500;color:var(--text)}
+.scorecard-cat{font-size:0.75rem;color:var(--text-muted);font-style:italic}
+.scorecard-verdict{font-size:0.82rem;color:var(--text-muted);margin-top:2px;line-height:1.4}
+.fit-perfect .scorecard-char{color:var(--easy)}
+.fit-loose .scorecard-char{color:var(--medium)}
+.fit-terrible .scorecard-char{color:var(--hard)}
 
 /* SCOREBOARD */
 .scoreboard{display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem}
@@ -336,6 +348,7 @@ input[type=text]::placeholder{color:var(--text-muted)}
     </div>
     <div class="narration" id="narration" style="display:none"></div>
     <div id="winner-wrap" style="display:none"></div>
+    <div id="scorecard-wrap" style="display:none"></div>
     <div class="btn-row" id="battle-actions" style="display:none;justify-content:center;margin-top:1.5rem">
       <button class="btn ghost" id="btn-new-cats" onclick="playAgainNewCats()">New categories</button>
       <button class="btn primary" id="btn-same-cats" onclick="playAgainSameCats()">Play again</button>
@@ -552,8 +565,9 @@ function startMasterListener(){
       document.getElementById('battle-loading').style.display='none';
       document.getElementById('narration').style.display='none';
       document.getElementById('winner-wrap').style.display='none';
+      document.getElementById('scorecard-wrap').style.display='none';
       document.getElementById('battle-actions').style.display='none';
-      typeNarration(room.narration);
+      typeNarration(room.narration, room.scorecard);
     }
   });
   G.listeners.push(r);
@@ -891,6 +905,7 @@ async function showBattleScreen(room){
   document.getElementById('battle-loading').style.display='block';
   document.getElementById('narration').style.display='none';
   document.getElementById('winner-wrap').style.display='none';
+  document.getElementById('scorecard-wrap').style.display='none';
   document.getElementById('battle-actions').style.display='none';
   const narration = await generateBattle(room);
   const winnerName = extractWinner(narration);
@@ -899,7 +914,8 @@ async function showBattleScreen(room){
   if(winner) newScores[winner.name] = (newScores[winner.name]||0)+1;
   // Write to Firebase — master listener picks this up for ALL players
   console.log('Writing battle to Firebase, narration length:', narration.length);
-  await update(ref(db,'rooms/'+G.roomCode), { status:'battle', narration, scores: newScores, winner: winner ? winner.name : null });
+  const scorecard = extractScorecard(narration);
+  await update(ref(db,'rooms/'+G.roomCode), { status:'battle', narration, scores: newScores, winner: winner ? winner.name : null, scorecard });
   console.log('Battle written to Firebase');
   _battleGenerating = false;
 }
@@ -943,7 +959,7 @@ async function generateBattle(room){
     const charList = Object.entries(chars).map(([cat,ch]) => cat+': '+ch).join(', ');
     return p.name+"'s team — "+charList;
   }).join('\n');
-  const prompt = "You are the narrator of Character Clash, a kids team battle game.\n\nTHE TEAMS (category: character):\n"+teamDesc+"\n\nRULES:\n- Keep it to 3 SHORT punchy paragraphs max\n- All teams fight as units simultaneously\n- SUITABILITY: if a character doesn't fit their category (e.g. a banana in the Dragon category), they fight at a clear disadvantage and this is noted humorously\n- Use real known abilities of each character\n- Silly picks can still win through cleverness\n- No gore, fun for kids\n- End with ONLY this line: 🏆 WINNER: [player name]\n\nKeep it short, dramatic and fun!";
+  const prompt = "You are the narrator of Character Clash, a kids team battle game.\n\nTHE TEAMS (category: character):\n"+teamDesc+"\n\nRULES:\n- Keep it to 3 SHORT punchy paragraphs max\n- All teams fight as units simultaneously\n- SUITABILITY: if a character does not fit their category (e.g. a banana in the Dragon category), they fight at a clear disadvantage, noted humorously\n- Use real known abilities of each character\n- Silly picks can still win through cleverness\n- No gore, fun for kids\n\nAfter the narration, output EXACTLY this line: 🏆 WINNER: [player name]\n\nThen output a SCORECARD section like this (one line per character, no extra text):\nSCORECARD\n[player name] | [category] | [character] | [perfect/loose/terrible] | [one funny sentence about fit]\n\nKeep narration short and fun!";
   try {
     const res = await fetch('https://character-clash-api.marakding.workers.dev',{
       method:'POST',
@@ -965,10 +981,25 @@ function extractWinner(text){
   return m ? m[1].trim() : null;
 }
 
-async function typeNarration(text){
+function extractScorecard(text){
+  const lines = text.split('\n');
+  const start = lines.findIndex(l=>l.trim().toUpperCase()==='SCORECARD');
+  if(start===-1) return [];
+  const rows = [];
+  for(let i=start+1;i<lines.length;i++){
+    const parts = lines[i].split('|').map(s=>s.trim());
+    if(parts.length>=5){
+      rows.push({ player:parts[0], category:parts[1], character:parts[2], fit:parts[3].toLowerCase(), verdict:parts[4] });
+    }
+  }
+  return rows;
+}
+
+async function typeNarration(text, scorecard){
   const box = document.getElementById('narration');
   box.style.display='block';
-  const mainText = text.replace(/🏆.*$/m,'').trim();
+  // Strip from SCORECARD section and winner line
+  const mainText = text.replace(/SCORECARD[\s\S]*/i,'').replace(/🏆.*$/m,'').trim();
   box.innerHTML = '<span class="cursor-blink"></span>';
   let i=0;
   await new Promise(resolve=>{
@@ -997,7 +1028,34 @@ async function typeNarration(text){
     G.scores = (await get(ref(db,`rooms/${G.roomCode}/scores`))).val() || {};
     renderScoreboard();
   }
+  // Show scorecard
+  if(scorecard && scorecard.length){
+    renderScorecard(scorecard);
+  }
   document.getElementById('battle-actions').style.display='flex';
+}
+
+function renderScorecard(rows){
+  const wrap = document.getElementById('scorecard-wrap');
+  const fitEmoji = {perfect:'✅', loose:'⚠️', terrible:'❌'};
+  const fitClass = {perfect:'fit-perfect', loose:'fit-loose', terrible:'fit-terrible'};
+  wrap.style.display='block';
+  wrap.innerHTML='<div class="scorecard">'
+    +'<div class="scorecard-title">Fit Scorecard</div>'
+    +rows.map(r=>{
+      const emoji = fitEmoji[r.fit]||'⚠️';
+      const cls = fitClass[r.fit]||'fit-loose';
+      const p = Object.values(G.players).find(pl=>r.player.toLowerCase().includes(pl.name.toLowerCase()));
+      const c = p ? colorFor(p.colorIdx) : COLORS[0];
+      return '<div class="scorecard-row">'
+        +'<div class="scorecard-emoji">'+emoji+'</div>'
+        +'<div class="scorecard-info '+cls+'">'
+        +'<div class="scorecard-char">'+r.character+'</div>'
+        +'<div class="scorecard-cat" style="color:'+c.text+'">'+r.player+' · '+r.category+'</div>'
+        +'<div class="scorecard-verdict">'+r.verdict+'</div>'
+        +'</div></div>';
+    }).join('')
+    +'</div>';
 }
 
 // ── PLAY AGAIN ────────────────────────────
