@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Character Clash ⚔</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --gold:#c9a84c;--gold-light:#f0d080;--gold-dim:rgba(201,168,76,0.2);
+  --dark:#0e0c1a;--dark2:#1a1628;--dark3:#251f38;
+  --surface:#2a2240;--surface2:#342d50;
+  --text:#e8e0f0;--text-muted:#9080b0;
+  --easy:#4caf7d;--medium:#e8a838;--hard:#e05252;
+  --border:rgba(201,168,76,0.25);--radius:12px;
+}
+html{scroll-behavior:smooth}
+body{font-family:'Crimson Pro',Georgia,serif;background:var(--dark);color:var(--text);min-height:100vh;overflow-x:hidden}
+
+/* SCREENS */
+.screen{display:none;flex-direction:column;min-height:100vh;animation:fadeIn 0.3s ease}
+.screen.active{display:flex}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* HEADER */
+.header{text-align:center;padding:2.5rem 1.5rem 1.5rem;background:linear-gradient(180deg,#080612 0%,transparent 100%);border-bottom:1px solid var(--border);position:relative}
+.header::after{content:'';position:absolute;bottom:0;left:10%;right:10%;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}
+.logo{font-family:'Cinzel',serif;font-size:clamp(1.8rem,6vw,2.8rem);font-weight:900;letter-spacing:0.05em;color:var(--gold-light);line-height:1}
+.logo-sub{font-family:'Cinzel',serif;font-size:0.55em;font-weight:400;color:var(--text-muted);letter-spacing:0.25em;display:block;margin-top:4px}
+.header-sub{font-size:1rem;color:var(--text-muted);margin-top:0.5rem;font-style:italic}
+
+/* CONTENT */
+.content{flex:1;padding:1.5rem;max-width:680px;margin:0 auto;width:100%}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.25rem;margin-bottom:1rem}
+.card-title{font-family:'Cinzel',serif;font-size:0.7rem;letter-spacing:0.18em;color:var(--gold);text-transform:uppercase;margin-bottom:0.85rem}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font-family:'Cinzel',serif;font-size:0.78rem;letter-spacing:0.08em;padding:0.6rem 1.25rem;border-radius:8px;border:1px solid var(--gold);background:transparent;color:var(--gold-light);cursor:pointer;transition:all 0.2s;text-decoration:none;white-space:nowrap}
+.btn:hover{background:var(--gold-dim)}
+.btn.primary{background:var(--gold);color:var(--dark);border-color:var(--gold);font-weight:700}
+.btn.primary:hover{background:var(--gold-light)}
+.btn.ghost{border-color:var(--border);color:var(--text-muted)}
+.btn.ghost:hover{border-color:var(--gold);color:var(--text)}
+.btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none}
+.btn-row{display:flex;gap:0.75rem;flex-wrap:wrap;margin-top:1rem;align-items:center}
+
+/* INPUTS */
+input[type=text]{background:var(--dark2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'Crimson Pro',serif;font-size:1rem;padding:0.5rem 0.75rem;width:100%;outline:none;transition:border-color 0.2s}
+input[type=text]:focus{border-color:var(--gold)}
+input[type=text]::placeholder{color:var(--text-muted)}
+
+/* LOADING DOTS */
+.dots span{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--gold);margin:0 3px;animation:bounce 1.2s infinite}
+.dots span:nth-child(2){animation-delay:0.2s}
+.dots span:nth-child(3){animation-delay:0.4s}
+@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-7px)}}
+
+/* UTIL */
+.error{color:var(--hard);font-size:0.875rem;margin-top:0.5rem;font-style:italic;min-height:1.2em}
+.muted{color:var(--text-muted);font-style:italic;font-size:0.9rem}
+.mt1{margin-top:0.75rem}
+.mt2{margin-top:1.25rem}
+.center{text-align:center}
+
+/* PLAYER COLORS */
+.av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Cinzel',serif;font-size:0.7rem;font-weight:700;flex-shrink:0}
+
+/* ============ SCREEN: LANDING ============ */
+#screen-landing .hero{text-align:center;padding:3rem 1.5rem 2rem}
+#screen-landing .tagline{font-size:1.2rem;color:var(--text-muted);font-style:italic;margin-top:0.5rem}
+#screen-landing .sword-divider{font-size:1.5rem;margin:2rem 0;opacity:0.4;letter-spacing:0.5rem}
+.mode-cards{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem}
+.mode-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem 1.25rem;cursor:pointer;transition:all 0.2s;text-align:center}
+.mode-card:hover{border-color:var(--gold);background:var(--surface2)}
+.mode-card .mode-icon{font-size:1.8rem;margin-bottom:0.75rem}
+.mode-card .mode-title{font-family:'Cinzel',serif;font-size:0.9rem;font-weight:700;color:var(--gold-light);letter-spacing:0.05em}
+.mode-card .mode-desc{font-size:0.85rem;color:var(--text-muted);margin-top:0.4rem;font-style:italic}
+
+/* ============ SCREEN: HOST SETUP ============ */
+.diff-row{display:grid;grid-template-columns:repeat(3,1fr);gap:0.75rem;margin-top:0.5rem}
+.diff-btn{padding:0.85rem 0.5rem;border-radius:10px;border:2px solid transparent;background:var(--dark2);cursor:pointer;text-align:center;transition:all 0.2s}
+.diff-btn .dl{font-family:'Cinzel',serif;font-size:0.8rem;letter-spacing:0.1em;font-weight:700}
+.diff-btn .ds{font-size:0.7rem;color:var(--text-muted);margin-top:3px;font-family:'Crimson Pro',serif;font-style:italic}
+.diff-btn.easy .dl{color:var(--easy)}
+.diff-btn.easy:hover,.diff-btn.easy.sel{border-color:var(--easy);background:rgba(76,175,125,0.12)}
+.diff-btn.medium .dl{color:var(--medium)}
+.diff-btn.medium:hover,.diff-btn.medium.sel{border-color:var(--medium);background:rgba(232,168,56,0.12)}
+.diff-btn.hard .dl{color:var(--hard)}
+.diff-btn.hard:hover,.diff-btn.hard.sel{border-color:var(--hard);background:rgba(224,82,82,0.12)}
+
+/* ============ SCREEN: LOBBY ============ */
+.room-code-display{font-family:'Cinzel',serif;font-size:3rem;font-weight:900;color:var(--gold-light);letter-spacing:0.3em;text-align:center;padding:1rem 0;text-shadow:0 0 30px rgba(201,168,76,0.4)}
+.player-chips{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem}
+.player-chip{display:flex;align-items:center;gap:0.5rem;background:var(--dark2);border:1px solid var(--border);border-radius:20px;padding:0.35rem 0.75rem;font-size:0.9rem}
+.player-chip.host-chip{border-color:var(--gold);background:var(--gold-dim)}
+.chip-crown{font-size:0.75rem;opacity:0.8}
+.waiting-pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--easy);animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.5;transform:scale(0.8)}}
+
+/* ============ SCREEN: JOIN ============ */
+.join-input{font-family:'Cinzel',serif;font-size:2rem;font-weight:700;letter-spacing:0.3em;text-align:center;padding:1rem;background:var(--dark2);border:2px solid var(--border);border-radius:var(--radius);color:var(--gold-light);width:100%;outline:none;transition:border-color 0.2s;text-transform:uppercase}
+.join-input:focus{border-color:var(--gold)}
+.join-input::placeholder{color:var(--text-muted);font-size:1.2rem;letter-spacing:0.15em}
+
+/* ============ SCREEN: CATEGORIES ============ */
+.cat-grid{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.5rem}
+.cat-pill{padding:0.4rem 0.85rem;border-radius:20px;border:1px solid var(--border);background:var(--dark2);color:var(--text-muted);font-size:0.9rem;cursor:pointer;transition:all 0.2s;user-select:none}
+.cat-pill:hover:not(.taken):not(.mine){border-color:var(--gold);color:var(--text)}
+.cat-pill.mine{border-color:var(--gold);background:var(--gold-dim);color:var(--gold-light);font-weight:600}
+.cat-pill.taken{opacity:0.35;cursor:not-allowed;text-decoration:line-through}
+.cat-pill.taken-by{opacity:0.6;cursor:not-allowed}
+.owner-tag{font-size:0.65rem;color:var(--text-muted);margin-left:4px;font-style:italic}
+.cat-status{display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;color:var(--text-muted);margin-top:0.75rem;font-style:italic}
+
+/* ============ SCREEN: CHARACTERS ============ */
+.cat-input-row{display:flex;align-items:center;gap:0.75rem;margin-bottom:0.6rem}
+.cat-badge{font-size:0.8rem;color:var(--text-muted);font-style:italic;min-width:140px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cat-input-row input{flex:1;font-size:0.95rem;padding:0.45rem 0.65rem}
+.ready-chip{display:inline-flex;align-items:center;gap:0.4rem;background:rgba(76,175,125,0.15);border:1px solid var(--easy);border-radius:20px;padding:0.25rem 0.65rem;font-size:0.8rem;color:var(--easy)}
+.not-ready-chip{display:inline-flex;align-items:center;gap:0.4rem;background:var(--dark2);border:1px solid var(--border);border-radius:20px;padding:0.25rem 0.65rem;font-size:0.8rem;color:var(--text-muted)}
+.player-ready-list{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem}
+
+/* ============ SCREEN: BATTLE ============ */
+.vs-strip{display:flex;align-items:center;justify-content:center;gap:0.75rem;flex-wrap:wrap;padding:1rem 0}
+.vs-chip{display:flex;align-items:center;gap:0.5rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.4rem 0.85rem}
+.vs-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.vs-label{font-family:'Cinzel',serif;font-size:0.8rem;font-weight:700;color:var(--text)}
+.vs-word{font-family:'Cinzel',serif;font-size:1rem;font-weight:900;color:var(--gold);opacity:0.5}
+.narration{background:var(--dark2);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;font-size:1.05rem;line-height:1.85;white-space:pre-wrap;position:relative}
+.cursor-blink{display:inline-block;width:2px;height:1em;background:var(--gold);margin-left:2px;vertical-align:middle;animation:blink 0.75s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.winner-wrap{background:linear-gradient(135deg,rgba(201,168,76,0.12),rgba(201,168,76,0.04));border:2px solid var(--gold);border-radius:var(--radius);padding:2rem;margin-top:1rem;text-align:center}
+.winner-crown{font-size:2.5rem;margin-bottom:0.5rem}
+.winner-label{font-family:'Cinzel',serif;font-size:0.65rem;letter-spacing:0.25em;color:var(--gold);text-transform:uppercase}
+.winner-name{font-family:'Cinzel',serif;font-size:2rem;font-weight:900;color:var(--gold-light);margin-top:0.25rem}
+
+/* SCOREBOARD */
+.scoreboard{display:flex;flex-wrap:wrap;gap:0.5rem;margin-bottom:1rem}
+.score-chip{display:flex;align-items:center;gap:0.5rem;background:var(--dark2);border:1px solid var(--border);border-radius:8px;padding:0.35rem 0.75rem;font-size:0.85rem}
+.score-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.score-wins{font-family:'Cinzel',serif;font-weight:700;color:var(--gold);margin-left:2px}
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     SCREEN: LANDING
+══════════════════════════════════════ -->
+<div class="screen active" id="screen-landing">
+  <div class="content" style="display:flex;flex-direction:column;justify-content:center;min-height:100vh">
+    <div style="text-align:center;padding:2rem 0 1.5rem">
+      <div class="logo">⚔ Character Clash ⚔<span class="logo-sub">the ultimate team battle</span></div>
+      <p style="color:var(--text-muted);font-style:italic;margin-top:0.75rem;font-size:1.05rem">Pick your team. Battle for glory.</p>
+    </div>
+    <div style="margin-top:1rem">
+      <p class="card-title" style="text-align:center;margin-bottom:0.75rem">Your name</p>
+      <input type="text" id="landing-name" placeholder="Enter your name..." maxlength="20" style="font-size:1.1rem;padding:0.65rem 1rem;text-align:center" />
+      <p class="error" id="landing-error"></p>
+    </div>
+    <div class="mode-cards mt2">
+      <div class="mode-card" onclick="startHost()">
+        <div class="mode-icon">👑</div>
+        <div class="mode-title">Host</div>
+        <div class="mode-desc">Start a new game &amp; invite others</div>
+      </div>
+      <div class="mode-card" onclick="startJoin()">
+        <div class="mode-icon">⚔</div>
+        <div class="mode-title">Join</div>
+        <div class="mode-desc">Enter a room code to join</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: HOST SETUP
+══════════════════════════════════════ -->
+<div class="screen" id="screen-host-setup">
+  <div class="header">
+    <div class="logo">Character Clash<span class="logo-sub">host setup</span></div>
+  </div>
+  <div class="content">
+    <div class="card">
+      <div class="card-title">Difficulty</div>
+      <p class="muted" style="margin-bottom:0.75rem">How hard should the categories be?</p>
+      <div class="diff-row">
+        <div class="diff-btn easy" onclick="selDiff('easy',this)">
+          <div class="dl">Easy</div>
+          <div class="ds">Lots of obvious characters</div>
+        </div>
+        <div class="diff-btn medium" onclick="selDiff('medium',this)">
+          <div class="dl">Medium</div>
+          <div class="ds">Need to think a bit</div>
+        </div>
+        <div class="diff-btn hard" onclick="selDiff('hard',this)">
+          <div class="dl">Hard</div>
+          <div class="ds">Tests your knowledge!</div>
+        </div>
+      </div>
+      <p class="error" id="diff-error"></p>
+    </div>
+    <div class="btn-row">
+      <button class="btn ghost" onclick="showScreen('screen-landing')">← Back</button>
+      <button class="btn primary" onclick="createRoom()">Create room →</button>
+    </div>
+    <div id="creating-room" style="display:none;text-align:center;padding:1rem">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <p class="muted mt1">Creating your room...</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: JOIN
+══════════════════════════════════════ -->
+<div class="screen" id="screen-join">
+  <div class="header">
+    <div class="logo">Character Clash<span class="logo-sub">join a game</span></div>
+  </div>
+  <div class="content">
+    <div class="card">
+      <div class="card-title">Room code</div>
+      <input type="text" class="join-input" id="join-code" placeholder="XXXX" maxlength="4" oninput="this.value=this.value.toUpperCase()" />
+      <p class="error" id="join-error"></p>
+    </div>
+    <div class="btn-row">
+      <button class="btn ghost" onclick="showScreen('screen-landing')">← Back</button>
+      <button class="btn primary" onclick="joinRoom()">Join →</button>
+    </div>
+    <div id="joining-room" style="display:none;text-align:center;padding:1rem">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <p class="muted mt1">Joining room...</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: LOBBY
+══════════════════════════════════════ -->
+<div class="screen" id="screen-lobby">
+  <div class="header">
+    <div class="logo">Character Clash<span class="logo-sub">waiting for players</span></div>
+  </div>
+  <div class="content">
+    <div class="card" style="text-align:center">
+      <div class="card-title">Room code — share this!</div>
+      <div class="room-code-display" id="lobby-code">----</div>
+      <button class="btn" onclick="copyRoomLink()" style="margin:0 auto">Copy invite link</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Players joined</div>
+      <div class="player-chips" id="lobby-players"></div>
+      <div style="display:flex;align-items:center;gap:0.5rem;margin-top:1rem">
+        <div class="waiting-pulse"></div>
+        <span class="muted" id="lobby-status">Waiting for others to join...</span>
+      </div>
+    </div>
+    <div id="host-lobby-actions" style="display:none">
+      <div class="btn-row">
+        <button class="btn primary" onclick="hostStartCategories()">Everyone's here — start! →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: CATEGORIES
+══════════════════════════════════════ -->
+<div class="screen" id="screen-categories">
+  <div class="header">
+    <div class="logo">Character Clash<span class="logo-sub">pick your category</span></div>
+  </div>
+  <div class="content">
+    <div class="card">
+      <div class="card-title">Choose one category for your team</div>
+      <p class="muted" style="margin-bottom:0.75rem">Each player picks one. First come, first served!</p>
+      <div id="cats-loading" style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0">
+        <div class="dots"><span></span><span></span><span></span></div>
+        <span class="muted">Searching for fresh categories...</span>
+      </div>
+      <div class="cat-grid" id="cat-grid" style="display:none"></div>
+      <div class="cat-status" id="cat-status" style="display:none"></div>
+    </div>
+    <div id="cat-waiting" style="display:none;text-align:center;padding:0.5rem 0">
+      <p class="muted">Waiting for all players to pick their category...</p>
+      <div class="player-chips mt1" id="cat-player-status"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: CHARACTERS
+══════════════════════════════════════ -->
+<div class="screen" id="screen-characters">
+  <div class="header">
+    <div class="logo">Character Clash<span class="logo-sub">build your team</span></div>
+  </div>
+  <div class="content">
+    <div class="card" id="char-card">
+      <div class="card-title">Your team</div>
+      <div id="char-inputs"></div>
+      <p class="error" id="char-error"></p>
+      <div class="btn-row mt1">
+        <button class="btn primary" onclick="submitCharacters()">Ready! ⚔</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Who's ready</div>
+      <div class="player-ready-list" id="ready-list"></div>
+      <p class="muted mt1" id="waiting-battle-msg">Waiting for all players...</p>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     SCREEN: BATTLE
+══════════════════════════════════════ -->
+<div class="screen" id="screen-battle">
+  <div class="header">
+    <div class="logo">⚔ Character Clash ⚔<span class="logo-sub">the battle</span></div>
+  </div>
+  <div class="content">
+    <div class="scoreboard" id="scoreboard"></div>
+    <div class="vs-strip" id="vs-strip"></div>
+    <div id="battle-loading" style="text-align:center;padding:2rem;display:none">
+      <div class="dots"><span></span><span></span><span></span></div>
+      <p class="muted mt1">The narrator watches the battle unfold...</p>
+    </div>
+    <div class="narration" id="narration" style="display:none"></div>
+    <div id="winner-wrap" style="display:none"></div>
+    <div class="btn-row" id="battle-actions" style="display:none;justify-content:center;margin-top:1.5rem">
+      <button class="btn ghost" id="btn-new-cats" onclick="playAgainNewCats()">New categories</button>
+      <button class="btn primary" id="btn-same-cats" onclick="playAgainSameCats()">Play again</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase + App Script -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+function getDatabase(){ return firebase.database(); }
+function ref(db, path){ return db.ref(path); }
+function set(r, val){ return r.set(val); }
+function get(r){ return r.once('value'); }
+function update(r, val){ return r.update(val); }
+function onValue(r, cb, opts){ if(opts && opts.onlyOnce){ r.once('value').then(s=>cb(s)); return ()=>{}; } const fn = s=>cb(s); r.on('value',fn); return ()=>r.off('value',fn); }
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDJgJr1J6VgVtqkoowBO94T9HgyAhNa-gU",
+  authDomain: "character-clash-f0982.firebaseapp.com",
+  databaseURL: "https://character-clash-f0982-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "character-clash-f0982",
+  storageBucket: "character-clash-f0982.firebasestorage.app",
+  messagingSenderId: "1032936477193",
+  appId: "1:1032936477193:web:38b51acf380626554e5ed8"
+};
+
+const ANTHROPIC_KEY = "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";
+
+const app = firebase.initializeApp(firebaseConfig);
+const db = getDatabase();
+
+const COLORS = [
+  {bg:'#3d2fa0',text:'#c4b8ff'},{bg:'#0f6e56',text:'#9fe1cb'},
+  {bg:'#993c1d',text:'#f0997b'},{bg:'#185fa5',text:'#85b7eb'},
+  {bg:'#993556',text:'#ed93b1'},{bg:'#854f0b',text:'#ef9f27'},
+  {bg:'#3b6d11',text:'#97c459'},{bg:'#5a3a7a',text:'#d4b4f5'},
+];
+
+let G = {
+  myName: '',
+  myId: '',
+  roomCode: '',
+  isHost: false,
+  difficulty: null,
+  categories: [],
+  players: {},
+  scores: {},
+  listeners: [],
+};
+
+function uid(){ return Math.random().toString(36).slice(2,10); }
+function initials(n){ return n.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2); }
+function colorFor(idx){ return COLORS[idx % COLORS.length]; }
+
+// ── NAVIGATION ──────────────────────────
+window.showScreen = function(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+// ── LANDING ──────────────────────────────
+window.startHost = function(){
+  const name = document.getElementById('landing-name').value.trim();
+  if(!name){ document.getElementById('landing-error').textContent='Enter your name first'; return; }
+  G.myName = name;
+  G.myId = uid();
+  document.getElementById('landing-error').textContent='';
+  showScreen('screen-host-setup');
+}
+
+window.startJoin = function(){
+  const name = document.getElementById('landing-name').value.trim();
+  if(!name){ document.getElementById('landing-error').textContent='Enter your name first'; return; }
+  G.myName = name;
+  G.myId = uid();
+  document.getElementById('landing-error').textContent='';
+  showScreen('screen-join');
+}
+
+// ── HOST SETUP ───────────────────────────
+window.selDiff = function(d, el){
+  document.querySelectorAll('.diff-btn').forEach(b=>b.classList.remove('sel'));
+  el.classList.add('sel');
+  G.difficulty = d;
+  document.getElementById('diff-error').textContent='';
+}
+
+window.createRoom = async function(){
+  if(!G.difficulty){ document.getElementById('diff-error').textContent='Pick a difficulty first'; return; }
+  document.getElementById('creating-room').style.display='block';
+  const code = Math.random().toString(36).slice(2,6).toUpperCase();
+  G.roomCode = code;
+  G.isHost = true;
+  const playerColorIdx = 0;
+  G.players[G.myId] = { name: G.myName, colorIdx: playerColorIdx, isHost: true };
+  await set(ref(db,`rooms/${code}`), {
+    code,
+    difficulty: G.difficulty,
+    status: 'lobby',
+    hostId: G.myId,
+    players: { [G.myId]: { name: G.myName, colorIdx: playerColorIdx, isHost: true } },
+    categories: [],
+    teams: {},
+    scores: {},
+  });
+  document.getElementById('creating-room').style.display='none';
+  enterLobby();
+}
+
+// ── JOIN ─────────────────────────────────
+window.joinRoom = async function(){
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  if(code.length < 4){ document.getElementById('join-error').textContent='Enter the 4-letter room code'; return; }
+  document.getElementById('joining-room').style.display='block';
+  const snap = await get(ref(db,`rooms/${code}`));
+  if(!snap.exists()){ document.getElementById('join-error').textContent='Room not found. Check the code!'; document.getElementById('joining-room').style.display='none'; return; }
+  const room = snap.val();
+  if(room.status !== 'lobby'){ document.getElementById('join-error').textContent='That game has already started!'; document.getElementById('joining-room').style.display='none'; return; }
+  G.roomCode = code;
+  G.isHost = false;
+  G.difficulty = room.difficulty;
+  const existingPlayers = room.players || {};
+  const colorIdx = Object.keys(existingPlayers).length;
+  await update(ref(db,`rooms/${code}/players`), { [G.myId]: { name: G.myName, colorIdx, isHost: false } });
+  document.getElementById('joining-room').style.display='none';
+  enterLobby();
+}
+
+// ── LOBBY ────────────────────────────────
+function enterLobby(){
+  G.roomCode && (document.getElementById('lobby-code').textContent = G.roomCode);
+  showScreen('screen-lobby');
+  listenLobby();
+}
+
+function listenLobby(){
+  const r = onValue(ref(db,`rooms/${G.roomCode}`), snap => {
+    if(!snap.exists()) return;
+    const room = snap.val();
+    G.players = room.players || {};
+    renderLobbyPlayers();
+    if(G.isHost) document.getElementById('host-lobby-actions').style.display='block';
+    if(room.status === 'categories'){
+      G.categories = room.categories || [];
+      clearListeners();
+      showCategoriesScreen();
+    }
+  });
+  G.listeners.push(r);
+}
+
+function renderLobbyPlayers(){
+  const el = document.getElementById('lobby-players');
+  el.innerHTML = Object.values(G.players).map(p => {
+    const c = colorFor(p.colorIdx);
+    return `<div class="player-chip ${p.isHost?'host-chip':''}">
+      <div class="av" style="width:24px;height:24px;font-size:0.6rem;background:${c.bg};color:${c.text}">${initials(p.name)}</div>
+      <span>${p.name}</span>${p.isHost?'<span class="chip-crown">👑</span>':''}
+    </div>`;
+  }).join('');
+  const n = Object.keys(G.players).length;
+  document.getElementById('lobby-status').textContent = n===1 ? 'Waiting for others...' : `${n} players ready`;
+}
+
+window.copyRoomLink = function(){
+  const url = window.location.href.split('?')[0] + '?room=' + G.roomCode;
+  navigator.clipboard.writeText(url).then(()=>alert('Link copied! Share it with your players.'));
+}
+
+window.hostStartCategories = async function(){
+  const n = Object.keys(G.players).length;
+  if(n < 2){ alert('Need at least 2 players!'); return; }
+  showScreen('screen-categories');
+  document.getElementById('cats-loading').style.display='flex';
+  document.getElementById('cat-grid').style.display='none';
+  const cats = await fetchCategories(G.difficulty);
+  G.categories = cats;
+  await update(ref(db,`rooms/${G.roomCode}`), { status:'categories', categories: cats });
+}
+
+// ── CATEGORIES ───────────────────────────
+async function fetchCategories(diff){
+  const diffDesc = {easy:'broad and very familiar — Dragon, Wizard, Superhero level',medium:'moderately specific — Trickster God, Elemental Titan level',hard:'very niche and obscure — Deep Sea Horror, Void Entity, Forgotten Deity level'};
+  const prompt = `Generate exactly 15 creative unique categories for Character Clash, a fantasy battle game. Difficulty: ${diff} (${diffDesc[diff]}). Each category = a TYPE of powerful character, 1-4 words, evocative. Return ONLY a JSON array of 15 strings, no explanation, no markdown.`;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:500,messages:[{role:'user',content:prompt}]})
+    });
+    const data = await res.json();
+    const text = data.content?.find(b=>b.type==='text')?.text || '[]';
+    const clean = text.replace(/```json|```/g,'').trim();
+    return JSON.parse(clean);
+  } catch(e){
+    return getDefaultCats(diff);
+  }
+}
+
+function getDefaultCats(diff){
+  const c={easy:['Dragon','Wizard','Giant Robot','Superhero','Animal King','Ninja','Ghost','Vampire','Time Traveler','Shapeshifter','Berserker','Sea Monster','Fire God','Ice Queen','Ancient Giant'],medium:['Trickster God','Elemental Titan','Undead Overlord','Shadow Assassin','Berserker Demigod','Psychic Champion','Ancient Golem','Storm Caller','Soul Reaper','Blood Mage','Iron Colossus','Phantom Archer','War Deity','Nature Spirit','Void Walker'],hard:['Deep Sea Horror','Fallen Angel Warrior','Clockwork Assassin','Dream Demon','Void Entity','Cursed Samurai','Forgotten Deity','Insect Swarm Intelligence','Primordial Chaos Being','Mirror Wraith','Bone Oracle','Dust Revenant','Fracture Witch','Hollow God','Plague Herald']};
+  return c[diff]||c.medium;
+}
+
+function showCategoriesScreen(){
+  showScreen('screen-categories');
+  renderCategories();
+  listenCategories();
+}
+
+function renderCategories(){
+  document.getElementById('cats-loading').style.display='none';
+  const grid = document.getElementById('cat-grid');
+  grid.style.display='flex';
+  document.getElementById('cat-status').style.display='flex';
+  const claimed = getClaimed();
+  const myPick = getMyPick();
+  grid.innerHTML = G.categories.map((cat,i) => {
+    const claimer = claimed[i];
+    if(claimer && claimer.id !== G.myId){
+      const c = colorFor(claimer.colorIdx);
+      return `<div class="cat-pill taken-by" title="${claimer.name} chose this">
+        ${cat}<span class="owner-tag">(${claimer.name})</span>
+      </div>`;
+    }
+    const isMine = myPick === i;
+    return `<div class="cat-pill ${isMine?'mine':''}" onclick="pickCategory(${i})">${cat}</div>`;
+  }).join('');
+  const total = Object.keys(G.players).length;
+  const picked = Object.keys(claimed).length;
+  document.getElementById('cat-status').innerHTML = picked===total
+    ? '<span style="color:var(--easy)">All categories chosen!</span>'
+    : `<span>${picked}/${total} players have picked</span>`;
+  if(myPick !== null) document.getElementById('cat-waiting').style.display='block';
+  renderCatPlayerStatus();
+}
+
+function getClaimed(){
+  const claimed = {};
+  const room = G._room || {};
+  const teams = room.teams || {};
+  Object.entries(teams).forEach(([pid, t]) => {
+    if(t.categoryIdx !== undefined){
+      const p = G.players[pid];
+      if(p) claimed[t.categoryIdx] = { id:pid, name:p.name, colorIdx:p.colorIdx };
+    }
+  });
+  return claimed;
+}
+
+function getMyPick(){
+  const room = G._room || {};
+  const teams = room.teams || {};
+  const mine = teams[G.myId];
+  return mine?.categoryIdx !== undefined ? mine.categoryIdx : null;
+}
+
+window.pickCategory = async function(idx){
+  const claimed = getClaimed();
+  if(claimed[idx] && claimed[idx].id !== G.myId) return;
+  await update(ref(db,`rooms/${G.roomCode}/teams/${G.myId}`), { categoryIdx: idx, categoryName: G.categories[idx], ready: false });
+}
+
+function renderCatPlayerStatus(){
+  const room = G._room || {};
+  const teams = room.teams || {};
+  const el = document.getElementById('cat-player-status');
+  if(!el) return;
+  el.innerHTML = Object.entries(G.players).map(([pid,p]) => {
+    const c = colorFor(p.colorIdx);
+    const hasPick = teams[pid]?.categoryIdx !== undefined;
+    return `<div class="player-chip">
+      <div class="av" style="width:22px;height:22px;font-size:0.6rem;background:${c.bg};color:${c.text}">${initials(p.name)}</div>
+      <span>${p.name}</span>
+      ${hasPick?'<span style="color:var(--easy);font-size:0.8rem">✓</span>':'<span style="color:var(--text-muted);font-size:0.8rem">…</span>'}
+    </div>`;
+  }).join('');
+}
+
+function listenCategories(){
+  const r = onValue(ref(db,`rooms/${G.roomCode}`), snap => {
+    if(!snap.exists()) return;
+    const room = snap.val();
+    G._room = room;
+    G.players = room.players || {};
+    G.categories = room.categories || G.categories;
+    renderCategories();
+    const teams = room.teams || {};
+    const total = Object.keys(G.players).length;
+    const picked = Object.values(teams).filter(t=>t.categoryIdx!==undefined).length;
+    if(picked >= total && total > 0){
+      clearListeners();
+      setTimeout(()=>showCharactersScreen(room), 600);
+    }
+  });
+  G.listeners.push(r);
+}
+
+// ── CHARACTERS ────────────────────────────
+function showCharactersScreen(room){
+  G._room = room;
+  const teams = room.teams || {};
+  const myTeam = teams[G.myId] || {};
+  const myCategory = myTeam.categoryName || G.categories[myTeam.categoryIdx] || '?';
+  const allCategories = Object.values(teams).map(t=>t.categoryName).filter(Boolean);
+  showScreen('screen-characters');
+  const inp = document.getElementById('char-inputs');
+  inp.innerHTML = allCategories.map((cat,i) => `
+    <div class="cat-input-row">
+      <span class="cat-badge">${cat}${cat===myCategory?' (yours)':''}</span>
+      <input type="text" id="char-${i}" placeholder="Your character..." maxlength="40" ${cat!==myCategory?'disabled style="opacity:0.4"':''} />
+    </div>
+  `).join('');
+  listenCharacters();
+}
+
+window.submitCharacters = async function(){
+  const room = G._room || {};
+  const teams = room.teams || {};
+  const myTeam = teams[G.myId] || {};
+  const myCategory = myTeam.categoryName;
+  const allCategories = Object.values(teams).map(t=>t.categoryName).filter(Boolean);
+  const myIdx = allCategories.indexOf(myCategory);
+  const input = document.getElementById(`char-${myIdx}`);
+  const val = input?.value.trim();
+  if(!val){ document.getElementById('char-error').textContent='Enter your character!'; return; }
+  document.getElementById('char-error').textContent='';
+  await update(ref(db,`rooms/${G.roomCode}/teams/${G.myId}`), { character: val, ready: true });
+  if(input) input.disabled = true;
+  document.querySelector('#char-card .btn.primary').disabled = true;
+}
+
+function listenCharacters(){
+  const r = onValue(ref(db,`rooms/${G.roomCode}`), snap => {
+    if(!snap.exists()) return;
+    const room = snap.val();
+    G._room = room;
+    const teams = room.teams || {};
+    const total = Object.keys(G.players).length;
+    const ready = Object.values(teams).filter(t=>t.ready).length;
+    renderReadyList(teams);
+    document.getElementById('waiting-battle-msg').textContent = ready===total ? 'Everyone is ready! Starting...' : `Waiting for ${total-ready} more player(s)...`;
+    if(ready >= total && total > 0){
+      clearListeners();
+      setTimeout(()=>showBattleScreen(room), 800);
+    }
+  });
+  G.listeners.push(r);
+}
+
+function renderReadyList(teams){
+  const el = document.getElementById('ready-list');
+  el.innerHTML = Object.entries(G.players).map(([pid,p]) => {
+    const c = colorFor(p.colorIdx);
+    const isReady = teams[pid]?.ready;
+    return `<div class="${isReady?'ready-chip':'not-ready-chip'}">
+      <div class="av" style="width:20px;height:20px;font-size:0.55rem;background:${c.bg};color:${c.text}">${initials(p.name)}</div>
+      <span style="font-size:0.8rem">${p.name}</span>
+      <span>${isReady?'✓':'…'}</span>
+    </div>`;
+  }).join('');
+}
+
+// ── BATTLE ────────────────────────────────
+async function showBattleScreen(room){
+  showScreen('screen-battle');
+  G.scores = room.scores || {};
+  renderScoreboard();
+  renderVsStrip(room);
+  document.getElementById('battle-loading').style.display='block';
+  document.getElementById('narration').style.display='none';
+  document.getElementById('winner-wrap').style.display='none';
+  document.getElementById('battle-actions').style.display='none';
+
+  if(G.isHost){
+    const narration = await generateBattle(room);
+    const winnerName = extractWinner(narration);
+    if(winnerName){
+      const winner = Object.values(G.players).find(p=>narration.toLowerCase().includes(p.name.toLowerCase()));
+      if(winner){
+        const newScores = {...G.scores};
+        newScores[winner.name] = (newScores[winner.name]||0)+1;
+        await update(ref(db,`rooms/${G.roomCode}`), { status:'battle', narration, scores: newScores, winner: winner.name });
+      } else {
+        await update(ref(db,`rooms/${G.roomCode}`), { status:'battle', narration });
+      }
+    } else {
+      await update(ref(db,`rooms/${G.roomCode}`), { status:'battle', narration });
+    }
+  } else {
+    listenBattle();
+  }
+
+  const r = onValue(ref(db,`rooms/${G.roomCode}/narration`), snap => {
+    if(!snap.exists()) return;
+    const narration = snap.val();
+    G._narration = narration;
+    document.getElementById('battle-loading').style.display='none';
+    typeNarration(narration);
+  },{onlyOnce:true});
+  G.listeners.push(r);
+}
+
+function renderVsStrip(room){
+  const teams = room.teams || {};
+  const strip = document.getElementById('vs-strip');
+  const entries = Object.entries(G.players);
+  strip.innerHTML = entries.map(([pid,p],i) => {
+    const c = colorFor(p.colorIdx);
+    const cat = teams[pid]?.categoryName || '';
+    const char = teams[pid]?.character || '';
+    return `
+      ${i>0?'<div class="vs-word">VS</div>':''}
+      <div class="vs-chip">
+        <div class="vs-dot" style="background:${c.bg}"></div>
+        <div>
+          <div class="vs-label">${p.name}</div>
+          <div style="font-size:0.75rem;color:var(--text-muted);font-style:italic">${cat}: ${char}</div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderScoreboard(){
+  const el = document.getElementById('scoreboard');
+  if(!Object.keys(G.scores).length){ el.style.display='none'; return; }
+  el.style.display='flex';
+  el.innerHTML = Object.entries(G.scores).map(([name,wins]) => {
+    const p = Object.values(G.players).find(p=>p.name===name);
+    const c = p ? colorFor(p.colorIdx) : COLORS[0];
+    return `<div class="score-chip"><div class="score-dot" style="background:${c.bg}"></div><span>${name}</span><span class="score-wins">${wins}W</span></div>`;
+  }).join('');
+}
+
+function listenBattle(){
+  const r = onValue(ref(db,`rooms/${G.roomCode}/narration`), snap => {
+    if(!snap.exists()) return;
+  });
+  G.listeners.push(r);
+}
+
+async function generateBattle(room){
+  const teams = room.teams || {};
+  const teamDesc = Object.entries(G.players).map(([pid,p]) => {
+    const t = teams[pid] || {};
+    return `${p.name}'s team — ${t.categoryName}: ${t.character}`;
+  }).join('\n');
+  const prompt = `You are the dramatic narrator of Character Clash, a team battle game.\n\nTHE TEAMS:\n${teamDesc}\n\nWrite a dramatic battle narration (5-8 paragraphs). Rules:\n- All teams fight simultaneously as units\n- Use each character's real abilities creatively\n- Silly characters can win through cleverness\n- No gore — epic and fun for kids\n- Big moments, reversals, team synergy\n- End with exactly this line on its own: 🏆 WINNER: [winning player name]\n\nMake it unforgettable!`;
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':ANTHROPIC_KEY,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:prompt}]})
+    });
+    const data = await res.json();
+    return data.content?.find(b=>b.type==='text')?.text || 'The battle was lost to legend...';
+  } catch(e){
+    return 'The battle was too epic for words... try again!';
+  }
+}
+
+function extractWinner(text){
+  const m = text.match(/🏆\s*WINNER:?\s*(.+)/i);
+  return m ? m[1].trim() : null;
+}
+
+async function typeNarration(text){
+  const box = document.getElementById('narration');
+  box.style.display='block';
+  const mainText = text.replace(/🏆.*$/m,'').trim();
+  box.innerHTML = '<span class="cursor-blink"></span>';
+  let i=0;
+  await new Promise(resolve=>{
+    function tick(){
+      if(i>=mainText.length){resolve();return;}
+      i=Math.min(i+3,mainText.length);
+      box.innerHTML=mainText.slice(0,i)+'<span class="cursor-blink"></span>';
+      setTimeout(tick,12);
+    }
+    tick();
+  });
+  box.innerHTML=mainText;
+
+  // Show winner
+  const winnerName = extractWinner(text);
+  if(winnerName){
+    const winner = Object.values(G.players).find(p=>winnerName.toLowerCase().includes(p.name.toLowerCase()))||{name:winnerName,colorIdx:0};
+    const c = colorFor(winner.colorIdx);
+    document.getElementById('winner-wrap').style.display='block';
+    document.getElementById('winner-wrap').innerHTML=`
+      <div class="winner-wrap">
+        <div class="winner-crown">👑</div>
+        <div class="winner-label">Champion</div>
+        <div class="winner-name" style="color:${c.text}">${winner.name}</div>
+      </div>`;
+    G.scores = (await get(ref(db,`rooms/${G.roomCode}/scores`))).val() || {};
+    renderScoreboard();
+  }
+  document.getElementById('battle-actions').style.display='flex';
+  if(!G.isHost){
+    document.getElementById('btn-new-cats').style.display='none';
+    document.getElementById('btn-same-cats').style.display='none';
+  }
+}
+
+// ── PLAY AGAIN ────────────────────────────
+window.playAgainNewCats = async function(){
+  if(!G.isHost) return;
+  clearListeners();
+  await update(ref(db,`rooms/${G.roomCode}`), { status:'categories', teams:{}, narration:null, winner:null });
+  showScreen('screen-categories');
+  document.getElementById('cats-loading').style.display='flex';
+  document.getElementById('cat-grid').style.display='none';
+  const cats = await fetchCategories(G.difficulty);
+  G.categories = cats;
+  await update(ref(db,`rooms/${G.roomCode}`), { categories: cats });
+  listenCategories();
+}
+
+window.playAgainSameCats = async function(){
+  if(!G.isHost) return;
+  clearListeners();
+  await update(ref(db,`rooms/${G.roomCode}`), { status:'categories', teams:{}, narration:null, winner:null });
+  showScreen('screen-categories');
+  document.getElementById('cats-loading').style.display='none';
+  document.getElementById('cat-grid').style.display='flex';
+  listenCategories();
+}
+
+function clearListeners(){
+  G.listeners.forEach(u=>{ try{u()}catch(e){} });
+  G.listeners=[];
+}
+
+// ── AUTO JOIN FROM URL ─────────────────────
+const urlParams = new URLSearchParams(window.location.search);
+const roomFromUrl = urlParams.get('room');
+if(roomFromUrl){
+  document.getElementById('join-code').value = roomFromUrl.toUpperCase();
+}
+</script>
+</body>
+</html>
