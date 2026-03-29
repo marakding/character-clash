@@ -112,6 +112,8 @@ input[type=text]::placeholder{color:var(--text-muted)}
 .cat-pill.mine{border-color:var(--gold);background:var(--gold-dim);color:var(--gold-light);font-weight:600}
 .cat-pill.taken{opacity:0.35;cursor:not-allowed;text-decoration:line-through}
 .cat-pill.taken-by{opacity:0.6;cursor:not-allowed}
+.cat-hint{display:block;font-size:0.65rem;color:var(--text-muted);font-style:italic;margin-top:2px;line-height:1.3}
+.cat-pill.mine .cat-hint{color:rgba(240,208,128,0.7)}
 .owner-tag{font-size:0.65rem;color:var(--text-muted);margin-left:4px;font-style:italic}
 .cat-status{display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;color:var(--text-muted);margin-top:0.75rem;font-style:italic}
 
@@ -632,15 +634,17 @@ function renderCategories(){
   const claimed = getClaimed();
   const myPick = getMyPick();
   grid.innerHTML = G.categories.map((cat,i) => {
+    const name = cat.name || cat;
+    const hint = cat.hint || '';
     const claimer = claimed[i];
     if(claimer && claimer.id !== G.myId){
       const c = colorFor(claimer.colorIdx);
-      return `<div class="cat-pill taken-by" title="${claimer.name} chose this">
-        ${cat}<span class="owner-tag">(${claimer.name})</span>
-      </div>`;
+      return '<div class="cat-pill taken-by">'+name+'<span class="owner-tag">('+claimer.name+')</span>'+(hint?'<span class="cat-hint">'+hint+'</span>':'')+'</div>';
     }
     const isMine = myPick === i;
-    return `<div class="cat-pill ${isMine?'mine':''}" onclick="pickCategory(${i})">${cat}</div>`;
+    return '<div class="cat-pill '+(isMine?'mine':'')+'" onclick="pickCategory('+i+')">'
+      +name+(hint?'<span class="cat-hint">'+hint+'</span>':'')
+      +'</div>';
   }).join('');
   const total = Object.keys(G.players).length;
   const picked = Object.keys(claimed).length;
@@ -674,7 +678,10 @@ function getMyPick(){
 window.pickCategory = async function(idx){
   const claimed = getClaimed();
   if(claimed[idx] && claimed[idx].id !== G.myId) return;
-  await update(ref(db,`rooms/${G.roomCode}/teams/${G.myId}`), { categoryIdx: idx, categoryName: G.categories[idx], ready: false });
+  const cat = G.categories[idx];
+  const catName = cat.name || cat;
+  const catHint = cat.hint || '';
+  await update(ref(db,'rooms/'+G.roomCode+'/teams/'+G.myId), { categoryIdx: idx, categoryName: catName, categoryHint: catHint, ready: false });
 }
 
 function renderCatPlayerStatus(){
@@ -704,16 +711,19 @@ function showCharactersScreen(room){
   // Build ordered category list from all players' picks
   const catList = Object.entries(teams)
     .filter(([pid,t]) => t.categoryName)
-    .map(([pid,t]) => ({ cat: t.categoryName, pickedBy: G.players[pid]?.name || '?' }));
+    .map(([pid,t]) => ({ cat: t.categoryName, hint: t.categoryHint||'', pickedBy: G.players[pid]?.name || '?' }));
   G._catList = catList;
   showScreen('screen-characters');
   const inp = document.getElementById('char-inputs');
-  inp.innerHTML = catList.map((entry, i) => `
-    <div class="cat-input-row">
-      <span class="cat-badge">${entry.cat} <span style="font-size:0.7rem;color:var(--text-muted)">(${entry.pickedBy}'s pick)</span></span>
-      <input type="text" id="char-${i}" placeholder="Your character..." maxlength="40" />
-    </div>
-  `).join('');
+  inp.innerHTML = catList.map((entry, i) =>
+    '<div class="cat-input-row">'
+    +'<span class="cat-badge">'+entry.cat
+    +(entry.hint?'<span style="display:block;font-size:0.65rem;color:var(--text-muted);font-style:italic">'+entry.hint+'</span>':'')
+    +'<span style="display:block;font-size:0.65rem;color:var(--text-muted)">'+entry.pickedBy+"'s pick</span>"
+    +'</span>'
+    +'<input type="text" id="char-'+i+'" placeholder="Your character..." maxlength="40" />'
+    +'</div>'
+  ).join('');
   listenCharacters();
 }
 
@@ -814,12 +824,12 @@ async function generateBattle(room){
     const charList = Object.entries(chars).map(([cat,ch]) => cat+': '+ch).join(', ');
     return p.name+"'s team — "+charList;
   }).join('\n');
-  const prompt = "You are the dramatic narrator of Character Clash, a team battle game.\n\nTHE TEAMS:\n"+teamDesc+"\n\nWrite a dramatic battle narration (5-8 paragraphs). Rules:\n- All teams fight simultaneously as units\n- Each player has multiple characters that work together as a team\n- Use each character's real abilities creatively\n- Silly characters can win through cleverness\n- No gore — epic and fun for kids\n- Big moments, reversals, team synergy\n- End with exactly this line on its own: 🏆 WINNER: [winning player name]\n\nMake it unforgettable!";
+  const prompt = "You are the narrator of Character Clash, a kids team battle game.\n\nTHE TEAMS (category: character):\n"+teamDesc+"\n\nRULES:\n- Keep it to 3 SHORT punchy paragraphs max\n- All teams fight as units simultaneously\n- SUITABILITY: if a character doesn't fit their category (e.g. a banana in the Dragon category), they fight at a clear disadvantage and this is noted humorously\n- Use real known abilities of each character\n- Silly picks can still win through cleverness\n- No gore, fun for kids\n- End with ONLY this line: 🏆 WINNER: [player name]\n\nKeep it short, dramatic and fun!";
   try {
     const res = await fetch('https://character-clash-api.marakding.workers.dev',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1200,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:600,messages:[{role:'user',content:prompt}]})
     });
     const data = await res.json();
     console.log('Battle API response:', data);
@@ -876,21 +886,21 @@ window.playAgainNewCats = async function(){
   if(!G.isHost){ alert('Only the host can start a new round!'); return; }
   _battleGenerating = false;
   clearListeners();
-  showScreen('screen-categories');
-  document.getElementById('cats-loading').style.display='flex';
-  document.getElementById('cat-grid').style.display='none';
   const cats = await fetchCategories(G.difficulty);
   G.categories = cats;
+  // Write reset to Firebase FIRST, then start listener, then show screen
   await update(ref(db,'rooms/'+G.roomCode), { status:'categories', teams:{}, narration:null, winner:null, categories: cats });
   startMasterListener();
+  showCategoriesScreen({ categories: cats });
 }
 
 window.playAgainSameCats = async function(){
   if(!G.isHost){ alert('Only the host can start a new round!'); return; }
   _battleGenerating = false;
   clearListeners();
-  await update(ref(db,'rooms/'+G.roomCode), { status:'categories', teams:{}, narration:null, winner:null });
+  await update(ref(db,'rooms/'+G.roomCode), { status:'categories', teams:{}, narration:null, winner:null, categories: G.categories });
   startMasterListener();
+  showCategoriesScreen({ categories: G.categories });
 }
 
 function clearListeners(){
