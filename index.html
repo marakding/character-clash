@@ -501,6 +501,7 @@ function startMasterListener(){
     G._room = room;
     G.players = room.players || {};
     const status = room.status || 'categories';
+    console.log('Master listener fired, status:', status, 'narrationShown:', narrationShown, 'hasNarration:', !!room.narration);
     const teams = room.teams || {};
     const total = Object.keys(G.players).length;
 
@@ -540,6 +541,7 @@ function startMasterListener(){
 
     // ── BATTLE phase ──
     else if(status === 'battle' && room.narration && !narrationShown){
+      console.log('BATTLE triggered, narration length:', room.narration.length);
       narrationShown = true;
       G.scores = room.scores || {};
       showScreen('screen-battle');
@@ -781,7 +783,9 @@ async function showBattleScreen(room){
   const newScores = Object.assign({}, G.scores);
   if(winner) newScores[winner.name] = (newScores[winner.name]||0)+1;
   // Write to Firebase — master listener picks this up for ALL players
+  console.log('Writing battle to Firebase, narration length:', narration.length);
   await update(ref(db,'rooms/'+G.roomCode), { status:'battle', narration, scores: newScores, winner: winner ? winner.name : null });
+  console.log('Battle written to Firebase');
   _battleGenerating = false;
 }
 
