@@ -114,6 +114,18 @@ input[type=text]::placeholder{color:var(--text-muted)}
 .cat-pill.taken-by{opacity:0.6;cursor:not-allowed}
 .cat-hint{display:block;font-size:0.65rem;color:var(--text-muted);font-style:italic;margin-top:2px;line-height:1.3}
 .cat-pill.mine .cat-hint{color:rgba(240,208,128,0.7)}
+.timer-wrap{display:flex;align-items:center;gap:1rem;padding:0.75rem 0;margin-bottom:0.5rem}
+.timer-ring{position:relative;width:72px;height:72px;flex-shrink:0}
+.timer-ring svg{transform:rotate(-90deg)}
+.timer-track{fill:none;stroke:var(--dark2);stroke-width:5}
+.timer-bar{fill:none;stroke-width:5;stroke-linecap:round;transition:stroke-dashoffset 1s linear,stroke 0.5s}
+.timer-num{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:'Cinzel',serif;font-size:1.1rem;font-weight:700;color:var(--gold-light)}
+.timer-info{flex:1}
+.timer-label{font-family:'Cinzel',serif;font-size:0.75rem;letter-spacing:0.1em;color:var(--gold);text-transform:uppercase}
+.timer-sub{font-size:0.8rem;color:var(--text-muted);font-style:italic;margin-top:2px}
+.timer-random-toast{background:rgba(224,82,82,0.12);border:1px solid var(--hard);border-radius:8px;padding:0.6rem 0.85rem;font-size:0.85rem;color:var(--hard);margin-top:0.75rem;display:none}
+@keyframes warnPulse{from{color:var(--medium)}to{color:var(--hard)}}
+.warn-pulse{animation:warnPulse 0.5s ease infinite alternate}
 .owner-tag{font-size:0.65rem;color:var(--text-muted);margin-left:4px;font-style:italic}
 .cat-status{display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;color:var(--text-muted);margin-top:0.75rem;font-style:italic}
 
@@ -318,10 +330,24 @@ input[type=text]::placeholder{color:var(--text-muted)}
   <div class="content">
     <div class="card" id="char-card">
       <div class="card-title">Your team</div>
+      <div class="timer-wrap">
+        <div class="timer-ring">
+          <svg width="72" height="72" viewBox="0 0 72 72">
+            <circle class="timer-track" cx="36" cy="36" r="30"/>
+            <circle class="timer-bar" id="timer-arc" cx="36" cy="36" r="30" stroke="#c9a84c" stroke-dasharray="188" stroke-dashoffset="0"/>
+          </svg>
+          <div class="timer-num" id="timer-num">--</div>
+        </div>
+        <div class="timer-info">
+          <div class="timer-label">Time remaining</div>
+          <div class="timer-sub" id="timer-sub">Waiting to start...</div>
+        </div>
+      </div>
       <div id="char-inputs"></div>
+      <div id="timer-random-toast" class="timer-random-toast"></div>
       <p class="error" id="char-error"></p>
       <div class="btn-row mt1">
-        <button class="btn primary" onclick="submitCharacters()">Ready! ⚔</button>
+        <button class="btn primary" id="char-submit-btn" onclick="submitCharacters()">Ready! ⚔</button>
       </div>
     </div>
     <div class="card">
@@ -380,6 +406,17 @@ const firebaseConfig = {
 
 const app = firebase.initializeApp(firebaseConfig);
 const db = getDatabase();
+
+const RANDOM_CHARS = [
+  'a confused penguin','a slightly damp towel','an overconfident hamster',
+  'a very small rock','a loaf of bread','a startled accountant',
+  'a rubber duck in armour','a philosophical potato','a sleepy goldfish',
+  'a strongly worded letter','an alarmed houseplant','a discount wizard',
+  'a bewildered postman','a deeply suspicious cat','a retired knight',
+];
+
+const TIMER_CIRCUMFERENCE = 2 * Math.PI * 30;
+let _timerInterval = null;
 
 const COLORS = [
   {bg:'#3d2fa0',text:'#c4b8ff'},{bg:'#0f6e56',text:'#9fe1cb'},
@@ -858,6 +895,66 @@ function showCharactersScreen(room){
     +'</div>'
   ).join('');
   listenCharacters();
+  startCharTimer(catList.length);
+}
+
+function startCharTimer(numCats){
+  clearInterval(_timerInterval);
+  const totalSecs = numCats * 60;
+  let remaining = totalSecs;
+  const arc = document.getElementById('timer-arc');
+  const numEl = document.getElementById('timer-num');
+  const subEl = document.getElementById('timer-sub');
+  if(!arc || !numEl) return;
+
+  function updateDisplay(){
+    const mins = Math.floor(remaining/60);
+    const secs = remaining%60;
+    numEl.textContent = mins+':'+(secs<10?'0':'')+secs;
+    const progress = remaining/totalSecs;
+    arc.style.strokeDashoffset = TIMER_CIRCUMFERENCE*(1-progress);
+    if(progress>0.5){ arc.style.stroke='#c9a84c'; numEl.classList.remove('warn-pulse'); }
+    else if(progress>0.2){ arc.style.stroke='#e8a838'; numEl.classList.remove('warn-pulse'); }
+    else { arc.style.stroke='#e05252'; numEl.classList.add('warn-pulse'); }
+    if(subEl) subEl.textContent = remaining<=10 ? 'Time is almost up!' : numCats+' min per category';
+  }
+
+  updateDisplay();
+  _timerInterval = setInterval(()=>{
+    remaining--;
+    updateDisplay();
+    if(remaining<=0){
+      clearInterval(_timerInterval);
+      autoSubmitCharacters();
+    }
+  },1000);
+}
+
+function autoSubmitCharacters(){
+  const catList = G._catList || [];
+  const characters = {};
+  const randomised = [];
+  catList.forEach((entry,i)=>{
+    const val = document.getElementById('char-'+i)?.value.trim();
+    if(val){
+      characters[entry.cat]=val;
+    } else {
+      const r = RANDOM_CHARS[Math.floor(Math.random()*RANDOM_CHARS.length)];
+      characters[entry.cat]=r;
+      randomised.push(r);
+    }
+  });
+  if(randomised.length>0){
+    const toast = document.getElementById('timer-random-toast');
+    if(toast){
+      toast.style.display='block';
+      toast.textContent = "Time's up! Random characters assigned: "+randomised.join(', ')+"! Expect a rough scorecard 😅";
+    }
+  }
+  document.querySelectorAll('#char-inputs input').forEach(el=>el.disabled=true);
+  const btn = document.getElementById('char-submit-btn');
+  if(btn) btn.disabled=true;
+  doSubmitCharacters(characters);
 }
 
 window.submitCharacters = async function(){
@@ -869,11 +966,15 @@ window.submitCharacters = async function(){
     characters[catList[i].cat] = val;
   }
   document.getElementById('char-error').textContent='';
-  // Write characters and set room status to 'characters' so master listener knows where we are
+  clearInterval(_timerInterval);
+  document.querySelectorAll('#char-inputs input').forEach(el => el.disabled = true);
+  document.getElementById('char-submit-btn').disabled = true;
+  await doSubmitCharacters(characters);
+}
+
+async function doSubmitCharacters(characters){
   await update(ref(db,'rooms/'+G.roomCode), { status:'characters' });
   await update(ref(db,'rooms/'+G.roomCode+'/teams/'+G.myId), { characters, ready: true });
-  document.querySelectorAll('#char-inputs input').forEach(el => el.disabled = true);
-  document.querySelector('#char-card .btn.primary').disabled = true;
 }
 
 function listenCharacters(){
@@ -1061,6 +1162,7 @@ function renderScorecard(rows){
 // ── PLAY AGAIN ────────────────────────────
 window.playAgainNewCats = async function(){
   if(!G.isHost){ alert('Only the host can start a new round!'); return; }
+  clearInterval(_timerInterval);
   _battleGenerating = false;
   clearListeners();
   const cats = await fetchCategories(G.difficulty);
@@ -1073,6 +1175,7 @@ window.playAgainNewCats = async function(){
 
 window.playAgainSameCats = async function(){
   if(!G.isHost){ alert('Only the host can start a new round!'); return; }
+  clearInterval(_timerInterval);
   _battleGenerating = false;
   clearListeners();
   await update(ref(db,'rooms/'+G.roomCode), { status:'categories', teams:{}, narration:null, winner:null, categories: G.categories });
