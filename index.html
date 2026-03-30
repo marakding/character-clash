@@ -604,7 +604,8 @@ function startMasterListener(){
       document.getElementById('winner-wrap').style.display='none';
       document.getElementById('scorecard-wrap').style.display='none';
       document.getElementById('battle-actions').style.display='none';
-      typeNarration(room.narration, room.scorecard);
+      const sc = room.scorecardJson ? JSON.parse(room.scorecardJson) : [];
+      typeNarration(room.narration, sc);
     }
   });
   G.listeners.push(r);
@@ -916,7 +917,7 @@ function startCharTimer(numCats){
     if(progress>0.5){ arc.style.stroke='#c9a84c'; numEl.classList.remove('warn-pulse'); }
     else if(progress>0.2){ arc.style.stroke='#e8a838'; numEl.classList.remove('warn-pulse'); }
     else { arc.style.stroke='#e05252'; numEl.classList.add('warn-pulse'); }
-    if(subEl) subEl.textContent = remaining<=10 ? 'Time is almost up!' : numCats+' min per category';
+    if(subEl) subEl.textContent = remaining<=10 ? 'Time is almost up!' : '1 min per category · '+numCats+' min total';
   }
 
   updateDisplay();
@@ -1016,7 +1017,8 @@ async function showBattleScreen(room){
   // Write to Firebase — master listener picks this up for ALL players
   console.log('Writing battle to Firebase, narration length:', narration.length);
   const scorecard = extractScorecard(narration);
-  await update(ref(db,'rooms/'+G.roomCode), { status:'battle', narration, scores: newScores, winner: winner ? winner.name : null, scorecard });
+  const scorecardJson = JSON.stringify(scorecard);
+  await update(ref(db,'rooms/'+G.roomCode), { status:'battle', narration, scores: newScores, winner: winner ? winner.name : null, scorecardJson });
   console.log('Battle written to Firebase');
   _battleGenerating = false;
 }
